@@ -1,56 +1,56 @@
 # Tables
-## Search Indexer Jobs
+## indexer_jobs
 
 | Field          | Type    |
 |----------------|---------|
-| platformID     | int     |
-| channelID      | string  |
-| status         | int (queued, running, completed, failed) |
-| lastCompleted  | dateTime|
+| platform_id    | int     |
+| channel_id     | string  |
+| job_state      | int (queued, running, completed, failed) |
+| last_completed | dateTime|
 | queued         | dateTime|
 
-## Transcription Jobs
+## transcription_jobs
 
 | Field          | Type    |
 |----------------|---------|
-| platformID     | int     |
-| channelID      | string  |
-| contentID      | string  |
-| buildIndex     | boolean |
-| status         | int (queued, running, completed, failed) |
-| lastCompleted  | dateTime|
+| platform_id    | int     |
+| channel_id     | string  |
+| content_id     | string  |
+| build_index    | boolean |
+| job_state      | int (queued, running, completed, failed) |
+| last_completed | dateTime|
 | queued         | dateTime|
 
-## Users
+## users
 
-| Field  | Type |
-|--------|------|
-| user   | uuid (blob) |
-| identities | text |
-| credits| int  |
-| lastRequest | dateTime |
-| isPremium | boolean |
+| Field       | Type |
+|-------------|------|
+| uuid          | uuid (blob) |
+| identities  | text |
+| credits     | int  |
+| last_request| dateTime |
+| is_premium  | boolean |
 
-## Channels
+## channels
 
-| Field      | Type   |
-|------------|--------|
-| platformID | int    |
-| channelID  | string |
-| credits    | int    |
+| Field       | Type   |
+|-------------|--------|
+| platform_id | int    |
+| channel_id  | string |
+| credits     | int    |
 
 # Routes
 ## POST /jobs
 ### Payload
 - Auth header includes jwt with user info
-- platformID
-- channelID
-- contentID (optional)
+- platform_id
+- channel_id
+- content_id (optional)
 
 ### Behavior
 1. Verify jwt
 2. Verify user last request time within rate limit (1/day for free users, 1/minute for premium)
-3. [Transcription Jobs Only] Verify user has sufficient credits
+3. [transcription jobs only] Verify user has sufficient credits
 4. Verify job is not already queued or running and last completed time falls within rate limit (1/week)
 5. Create or update job in database
 6. Update user last request time
