@@ -1,35 +1,35 @@
 # Tables
 ## indexer_jobs
 
-| Field          | Type    |
-|----------------|---------|
-| platform_id    | int     |
-| channel_id     | string  |
-| job_state      | int (queued, running, completed, failed) |
-| last_completed | dateTime|
-| queued         | dateTime|
+| Field          | Type                                           |
+|----------------|------------------------------------------------|
+| platform_id    | int                                            |
+| channel_id     | string                                         |
+| job_state      | int (queued, downloading, running, completed, failed) |
+| last_completed | dateTime                                       |
+| queued         | dateTime                                       |
 
 ## transcription_jobs
 
-| Field          | Type    |
-|----------------|---------|
-| platform_id    | int     |
-| channel_id     | string  |
-| content_id     | string  |
-| build_index    | boolean |
-| job_state      | int (queued, running, completed, failed) |
-| last_completed | dateTime|
-| queued         | dateTime|
+| Field          | Type                                           |
+|----------------|------------------------------------------------|
+| platform_id    | int                                            |
+| channel_id     | string                                         |
+| content_id     | string                                         |
+| build_index    | boolean                                        |
+| job_state      | int (queued, downloading, running, completed, failed) |
+| last_completed | dateTime                                       |
+| queued         | dateTime                                       |
 
 ## users
 
-| Field       | Type |
-|-------------|------|
-| uuid          | uuid (blob) |
-| identities  | text |
-| credits     | int  |
-| last_request| dateTime |
-| is_premium  | boolean |
+| Field        | Type          |
+|--------------|---------------|
+| uuid         | uuid (blob)    |
+| identities   | text          |
+| credits      | int           |
+| last_request | dateTime      |
+| is_premium   | boolean       |
 
 ## channels
 
@@ -51,6 +51,6 @@
 1. Verify jwt
 2. Verify user last request time within rate limit (1/day for free users, 1/minute for premium)
 3. [transcription jobs only] Verify user has sufficient credits
-4. Verify job is not already queued or running and last completed time falls within rate limit (1/week)
-5. Create or update job in database
+4. Verify job is not already queued, downloading, or running and last completed time falls within rate limit (1/week)
+5. Create or update job in database with `queued` state
 6. Update user last request time

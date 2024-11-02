@@ -56,6 +56,17 @@ function uuidToBigint(uuid: string) {
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
+		// Handle CORS preflight requests
+		if (request.method === 'OPTIONS') {
+			return new Response(null, {
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+					'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+				},
+			});
+		}
+
 		if (request.method === 'POST' && new URL(request.url).pathname === '/jobs') {
 			try {
 				const authHeader = request.headers.get('Authorization');
@@ -117,7 +128,19 @@ export default {
 				const rateLimit = isPremium ? 60 : 24 * 60 * 60; // 1 minute or 1 day
 
 				if (currentTime - lastRequestTime < rateLimit) {
-					return new Response('Rate limit exceeded', { status: 429 });
+					const timeRemaining = rateLimit - (currentTime - lastRequestTime);
+					const hours = Math.ceil(timeRemaining / 3600);
+
+					const message = isPremium
+						? `Premium users can make 1 request per minute.`
+						: `Free users can make 1 request per day. Please wait ${hours} hour(s).`;
+
+					return new Response(message, {
+						status: 429,
+						headers: {
+							'Access-Control-Allow-Origin': '*',
+						},
+					});
 				}
 
 				const { platform_id, channel_id, content_id } = (await request.json()) as {
@@ -154,12 +177,22 @@ export default {
 					.bind(platform_id, channel_id, ...(content_id ? [content_id] : []))
 					.first();
 
-				if (existingJob && [0, 1].includes(existingJob.job_state as number)) {
-					return new Response('Job is already queued or running', { status: 400 });
+				if (existingJob && [0, 1, 2].includes(existingJob.job_state as number)) {
+					return new Response('Job is already queued or running', {
+						status: 409,
+						headers: {
+							'Access-Control-Allow-Origin': '*',
+						},
+					});
 				}
 
 				if (jobDb === indexJobsDb && existingJob && (existingJob.last_completed as number) > currentTime - 7 * 24 * 60 * 60) {
-					return new Response('Job was completed recently', { status: 400 });
+					return new Response('Job was completed recently', {
+						status: 429,
+						headers: {
+							'Access-Control-Allow-Origin': '*',
+						},
+					});
 				}
 
 				// Create or update job in database
@@ -180,12 +213,27 @@ export default {
 				// Update user last request time
 				await usersDb.prepare(`UPDATE users SET last_request = ? WHERE uuid = ${userID}`).bind(currentTime).run();
 
-				return new Response('Job created successfully', { status: 201 });
+				return new Response('Job created successfully', {
+					status: 201,
+					headers: {
+						'Access-Control-Allow-Origin': '*',
+					},
+				});
 			} catch (error) {
 				console.error(error);
-				return new Response('Error processing job', { status: 400 });
+				return new Response('Error processing job', {
+					status: 400,
+					headers: {
+						'Access-Control-Allow-Origin': '*',
+					},
+				});
 			}
 		}
-		return new Response('Not found', { status: 404 });
+		return new Response('Not found', {
+			status: 404,
+			headers: {
+				'Access-Control-Allow-Origin': '*',
+			},
+		});
 	},
 } satisfies ExportedHandler<Env>;
