@@ -27,6 +27,13 @@ export default function ChannelPage() {
   const channelIdStr = typeof channelId === "string" ? channelId : "";
   const apiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "";
 
+  const platformIds: { [key: string]: number } = {
+    youtube: 0,
+    // add other platforms here
+  };
+
+  const platformNum = platformIds[platformStr] || 0;
+
   const handleVideoClick = (videoId: string): void => {
     router.push(`channels/${platform}/${channelId}/${videoId}`);
   };
@@ -83,7 +90,7 @@ export default function ChannelPage() {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          platform_id: platformStr,
+          platform_id: platformNum,
           channel_id: channelIdStr,
         }),
       });
@@ -115,7 +122,7 @@ export default function ChannelPage() {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          platform_id: platformStr,
+          platform_id: platformNum,
           channel_id: channelIdStr,
           content_id: contentId,
         }),
