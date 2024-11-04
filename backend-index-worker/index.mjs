@@ -178,7 +178,7 @@ async function processJob(job, download_only) {
   const ytDlpCommand = `yt-dlp --flat-playlist  --dump-json ${playlistUrl}`; //--extractor-args "youtubetab:approximate_date"
   const videoListRaw = await execCommand(ytDlpCommand);
   const videos = parseVideoList(videoListRaw).filter((video) =>
-    video.url.beginsWith("https://www.youtube.com/watch?v=")
+    video.url.startsWith("https://www.youtube.com/watch?v=")
   ); //TODO handle shorts
 
   // Download transcripts starting from newest video
@@ -322,8 +322,8 @@ async function execCommand(command) {
 function parseVideoList(rawData) {
   const lines = rawData.trim().split("\n");
   return lines.map((line) => {
-    const { id, title, upload_date } = JSON.parse(line);
-    return { id, title, upload_date };
+    const { id, title, upload_date, url } = JSON.parse(line);
+    return { id, title, upload_date, url };
   });
 }
 
