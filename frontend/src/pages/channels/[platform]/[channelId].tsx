@@ -61,7 +61,7 @@ export default function ChannelPage() {
   const platformNum = platformIds[platformStr] || 0;
 
   const handleVideoClick = (videoId: string): void => {
-    router.push(`channels/${platform}/${channelId}/${videoId}`);
+    router.push(`/channels/${platform}/${channelId}/${videoId}`);
   };
 
   const formatDate = (daysSinceEpoch: number): string => {
