@@ -5,7 +5,7 @@
 |----------------|------------------------------------------------|
 | platform_id    | int                                            |
 | channel_id     | string                                         |
-| job_state      | int (queued, downloading, running, completed, failed) |
+| job_state      | int (queued, running, content_uploaded, completed, failed) |
 | last_completed | dateTime                                       |
 | queued         | dateTime                                       |
 
@@ -17,7 +17,7 @@
 | channel_id     | string                                         |
 | content_id     | string                                         |
 | build_index    | boolean                                        |
-| job_state      | int (queued, downloading, running, completed, failed) |
+| job_state      | int (queued, running, content_uploaded, completed, failed) |
 | last_completed | dateTime                                       |
 | queued         | dateTime                                       |
 
