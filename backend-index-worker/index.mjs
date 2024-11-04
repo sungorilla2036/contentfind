@@ -406,6 +406,7 @@ async function uploadFiles(
   if (!download_only && fs.existsSync(searchBundlePath)) {
     const files = globSync(`${searchBundlePath}/**/*`, {
       nodir: true,
+      posix: true,
     });
     for (const filePath of files) {
       const fileContent = fs.readFileSync(filePath);
