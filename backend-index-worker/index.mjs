@@ -177,7 +177,9 @@ async function processJob(job, download_only) {
   const playlistUrl = `https://www.youtube.com/@${channel_id}`;
   const ytDlpCommand = `yt-dlp --flat-playlist  --dump-json ${playlistUrl}`; //--extractor-args "youtubetab:approximate_date"
   const videoListRaw = await execCommand(ytDlpCommand);
-  const videos = parseVideoList(videoListRaw);
+  const videos = parseVideoList(videoListRaw).filter((video) =>
+    video.url.beginsWith("https://www.youtube.com/watch?v=")
+  ); //TODO handle shorts
 
   // Download transcripts starting from newest video
   console.log("Downloading transcripts for new videos");
@@ -458,7 +460,7 @@ async function main() {
       console.error("Error fetching job:", error);
     }
     if (!job) {
-      await new Promise((resolve) => setTimeout(resolve, 10000)); // Wait for 10 seconds
+      await new Promise((resolve) => setTimeout(resolve, 60000)); // Wait for 60 seconds
       continue;
     }
 
