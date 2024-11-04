@@ -410,7 +410,7 @@ async function uploadFiles(
     });
     for (const filePath of files) {
       const fileContent = fs.readFileSync(filePath);
-      const key = filePath.replace("tmp/", "");
+      const key = filePath.substring(4); // assume tmp/ is the prefix
       await s3
         .putObject({
           Bucket: bucketName,
