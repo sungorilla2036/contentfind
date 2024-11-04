@@ -2,6 +2,7 @@ import { useSession, useSupabaseClient } from "@supabase/auth-helpers-react";
 import { Button } from "@/components/ui/button";
 import { TwitchIcon } from "./Icons";
 import { useRouter } from "next/router";
+import Link from "next/link";
 
 export default function MenuBar() {
   const session = useSession();
@@ -22,7 +23,9 @@ export default function MenuBar() {
 
   return (
     <div className="flex items-center justify-between py-4 px-8 bg-white shadow">
-      <div className="text-2xl font-bold">ContentFind</div>
+      <div className="text-2xl font-bold">
+        <Link href="/">ContentFind</Link>
+      </div>
       {session ? (
         <div>
           <span className="mr-2">{session.user.user_metadata["name"]}</span>
