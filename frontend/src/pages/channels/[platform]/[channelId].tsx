@@ -363,7 +363,6 @@ export default function ChannelPage() {
                       )}
                     </div>
                   ))}
-                  <div ref={loader} />
                 </div>
               ) : (
                 <div className="text-center py-8">
@@ -375,6 +374,7 @@ export default function ChannelPage() {
           </div>
         </div>
       </div>
+      <div ref={loader} />
     </div>
   );
 }
