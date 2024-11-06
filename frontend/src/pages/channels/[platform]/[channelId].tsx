@@ -46,7 +46,11 @@ export default function ChannelPage() {
   const [isIndexed, setIsIndexed] = useState(false);
   const [videos, setVideos] = useState<Video[]>([]);
   const [lastUpdatedDate, setLastUpdatedDate] = useState<Date | null>(null);
-  const [searchResults, setSearchResults] = useState<Video[]>([]);
+  const [fullSearchResults, setFullSearchResults] = useState<SearchResult[]>(
+    []
+  ); // Added to store all search results
+  const [searchResults, setSearchResults] = useState<Video[]>([]); // Visible search results
+  const [visibleCount, setVisibleCount] = useState(10); // Initialize visibility count
   const [pagefindInitialized, setPagefindInitialized] = useState(false);
   const platformStr = typeof platform === "string" ? platform : "";
   const channelIdStr = typeof channelId === "string" ? channelId : "";
@@ -103,10 +107,6 @@ export default function ChannelPage() {
     }
   }, [platformNum, channelId, bucketUrl]);
 
-  const [visibleSearchCount, setVisibleSearchCount] = useState(5); // Added for search results
-  const [visibleVideosCount, setVisibleVideosCount] = useState(10); // Added for full videos list
-  const loader = useRef<HTMLDivElement | null>(null); // Added ref for loader
-
   // Modify performSearch to load initial batch
   useEffect(() => {
     const performSearch = async () => {
@@ -125,77 +125,80 @@ export default function ChannelPage() {
         }
 
         if (window.pagefind) {
-          console.log("Searching...");
           const searchResultsFull = await window.pagefind.debouncedSearch(
             search
           );
-          console.log(searchResultsFull);
           if (searchResultsFull) {
-            const initialResults = await Promise.all(
-              (searchResultsFull as SearchResultsFull).results.map(
-                async (r: SearchResult) => {
-                  const data: SearchResultData = await r.data();
-                  const videoId: string = data.url.split("/").pop() || "";
-                  const matchedVideo: Video | undefined = videos.find(
-                    (video: Video) => video.id === videoId
-                  );
-                  return {
-                    id: videoId,
-                    title: matchedVideo
-                      ? matchedVideo.title
-                      : `Video ${videoId}`,
-                    date: matchedVideo ? matchedVideo.date : 0,
-                    transcriptAvailable: matchedVideo
-                      ? matchedVideo.transcriptAvailable
-                      : false,
-                    excerpt: data.excerpt,
-                  } as Video;
-                }
-              )
-            );
-            setSearchResults(initialResults);
+            // Store search result references without loading all data
+            const results = (searchResultsFull as SearchResultsFull).results;
+            setFullSearchResults(results);
+            setSearchResults([]); // Reset current visible results
+            setVisibleCount(5); // Reset count to 5 when searching
           }
         }
       } else {
         setSearchResults([]);
+        setFullSearchResults([]);
+        setVisibleCount(5);
       }
     };
     performSearch();
-  }, [
-    search,
-    videos,
-    platformNum,
-    channelIdStr,
-    bucketUrl,
-    pagefindInitialized,
-  ]);
+  }, [search, platformNum, channelIdStr, bucketUrl, pagefindInitialized]);
 
-  // Set up Intersection Observer
+  useEffect(() => {
+    const loadMoreResults = async () => {
+      if (fullSearchResults.length > 0) {
+        const nextResults = fullSearchResults.slice(
+          visibleCount - 5,
+          visibleCount
+        );
+        const videosData = await Promise.all(
+          nextResults.map(async (r: SearchResult) => {
+            const data: SearchResultData = await r.data();
+            const videoId: string = data.url.split("/").pop() || "";
+            const matchedVideo: Video | undefined = videos.find(
+              (video: Video) => video.id === videoId
+            );
+            return {
+              id: videoId,
+              title: matchedVideo ? matchedVideo.title : `Video ${videoId}`,
+              date: matchedVideo ? matchedVideo.date : 0,
+              transcriptAvailable: matchedVideo
+                ? matchedVideo.transcriptAvailable
+                : false,
+              excerpt: data.excerpt,
+            } as Video;
+          })
+        );
+        setSearchResults((prevResults) => [...prevResults, ...videosData]);
+      }
+    };
+
+    loadMoreResults();
+  }, [fullSearchResults, visibleCount, videos]);
+
+  const loader = useRef<HTMLDivElement | null>(null); // Added ref for loader
   useEffect(() => {
     const observer = new IntersectionObserver(
-      async (entries) => {
+      (entries) => {
         if (entries[0].isIntersecting) {
-          if (search) {
-            // Load more from existing searchResults
-            const newCount = visibleSearchCount + 5;
-            setVisibleSearchCount(newCount);
-          } else {
-            const newCount = visibleVideosCount + 10;
-            setVisibleVideosCount(newCount);
-          }
+          setVisibleCount((prevCount) => prevCount + 5);
         }
       },
       { threshold: 1 }
     );
-    if (loader.current) {
-      observer.observe(loader.current);
+
+    const elem = loader.current;
+    if (elem) {
+      observer.observe(elem);
     }
+
     return () => {
-      if (loader.current) {
-        observer.unobserve(loader.current);
+      if (elem) {
+        observer.unobserve(elem);
       }
     };
-  }, [loader, search, visibleSearchCount, visibleVideosCount, videos]);
+  }, []);
 
   const handleReindex = async () => {
     if (!session) {
@@ -263,8 +266,8 @@ export default function ChannelPage() {
   };
 
   const videosToDisplay = search
-    ? searchResults.slice(0, visibleSearchCount)
-    : videos.slice(0, visibleVideosCount);
+    ? searchResults.slice(0, visibleCount)
+    : videos.slice(0, visibleCount);
 
   return (
     <div>
@@ -360,8 +363,7 @@ export default function ChannelPage() {
                       )}
                     </div>
                   ))}
-                  <div ref={loader} />{" "}
-                  {/* Added loader div for infinite scroll */}
+                  <div ref={loader} />
                 </div>
               ) : (
                 <div className="text-center py-8">
