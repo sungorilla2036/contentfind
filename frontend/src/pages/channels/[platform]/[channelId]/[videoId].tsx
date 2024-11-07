@@ -1,21 +1,19 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import MenuBar from "@/components/MenuBar";
-import PlatformChannelForm from "@/components/PlatformChannelForm"; // Added import
-import srtParser2 from "srt-parser-2"; // Added import
+import PlatformChannelForm from "@/components/PlatformChannelForm";
 
 export default function VideoPage() {
   const router = useRouter();
   const { platform, channelId, videoId } = router.query;
 
-  const [transcript, setTranscript] = useState<
-    { start: number; text: string }[]
-  >([]);
-  const [youtubeEmbedUrl, setYoutubeEmbedUrl] = useState<string>("");
+  const [transcript, setTranscript] = useState<[number, number, string][]>([]);
+  const [embedUrl, setEmbedUrl] = useState<string>("");
   const bucketUrl = process.env.NEXT_PUBLIC_BUCKET_URL || "";
 
   const platformIds: { [key: string]: number } = {
     youtube: 0,
+    twitch: 1,
     // add other platforms here
   };
   const platformNum = platformIds[platform as string] || 0;
@@ -23,25 +21,23 @@ export default function VideoPage() {
   useEffect(() => {
     if (platform && channelId && videoId) {
       fetch(
-        `${bucketUrl}/${platformNum}/${channelId}/transcripts/${videoId}.srt`
+        `${bucketUrl}/${platformNum}/${channelId}/transcripts/${videoId}.json`
       )
-        .then((response) => response.text())
+        .then((response) => response.json())
         .then((data) => {
-          const parser = new srtParser2();
-          const parsed = parser.fromSrt(data);
-          const lines = parsed.map((item) => ({
-            start: item.startSeconds,
-            text: item.text,
-          }));
-          setTranscript(lines);
+          setTranscript(data);
         })
         .catch(() => {
-          setTranscript([{ start: 0, text: "Transcript not available." }]);
+          setTranscript([[0, 0, "Transcript not available."]]);
         });
 
-      // If platform is YouTube, set embed URL
+      // Set embed URL based on platform
       if (platform === "youtube") {
-        setYoutubeEmbedUrl(`https://www.youtube.com/embed/${videoId}`);
+        setEmbedUrl(`https://www.youtube.com/embed/${videoId}`);
+      } else if (platform === "twitch") {
+        setEmbedUrl(
+          `https://player.twitch.tv/?video=${videoId}&parent=yourdomain.com&autoplay=false`
+        );
       }
     }
   }, [platform, channelId, videoId, platformNum, bucketUrl]);
@@ -59,13 +55,13 @@ export default function VideoPage() {
             initialChannelId={typeof channelId === "string" ? channelId : ""}
           />
           <div className="p-6">
-            {youtubeEmbedUrl ? (
+            {embedUrl ? (
               <div className="mb-6">
                 <iframe
                   width="100%"
                   height="400"
-                  src={youtubeEmbedUrl}
-                  title="YouTube video player"
+                  src={embedUrl}
+                  title="Video player"
                   frameBorder="0"
                   allowFullScreen
                 ></iframe>
@@ -80,7 +76,7 @@ export default function VideoPage() {
                 <div className="space-y-2">
                   {transcript.map((line, index) => (
                     <p key={index} className="text-gray-700">
-                      {line.text}
+                      {line[2]}
                     </p>
                   ))}
                 </div>
