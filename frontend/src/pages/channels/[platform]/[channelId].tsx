@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState, useEffect, useRef } from "react"; // Added useRef
+import Modal from "@/components/Modal"; // Import the Modal component
 
 declare global {
   interface Window {
@@ -50,7 +51,7 @@ export default function ChannelPage() {
     []
   ); // Added to store all search results
   const [searchResults, setSearchResults] = useState<Video[]>([]); // Visible search results
-  const [visibleCount, setVisibleCount] = useState(10); // Initialize visibility count
+  const [visibleCount, setVisibleCount] = useState(5); // Initialize visibility count
   const [pagefindInitialized, setPagefindInitialized] = useState(false);
   const platformStr = typeof platform === "string" ? platform : "";
   const channelIdStr = typeof channelId === "string" ? channelId : "";
@@ -102,6 +103,7 @@ export default function ChannelPage() {
         })
         .catch(() => {
           setIsIndexed(false);
+          setLastUpdatedDate(null);
           setVideos([]);
         });
     }
@@ -200,9 +202,13 @@ export default function ChannelPage() {
     };
   }, []);
 
+  const [modalMessage, setModalMessage] = useState(""); // Added state for modal message
+  const [isModalVisible, setIsModalVisible] = useState(false); // Added state for modal visibility
+
   const handleReindex = async () => {
     if (!session) {
-      alert("Please log in to perform this action.");
+      setModalMessage("Please log in to perform this action."); // Replaced alert with modal
+      setIsModalVisible(true);
       return;
     }
     const accessToken = session.access_token;
@@ -220,23 +226,28 @@ export default function ChannelPage() {
       });
 
       if (res.ok) {
-        alert("Indexing job created successfully.");
+        setModalMessage("Indexing job created successfully."); // Replaced alert with modal
+        setIsModalVisible(true);
         setIsIndexed(true);
       } else {
         const errorText = await res.text();
-        alert(`Error creating indexing job: ${errorText}`);
+        setModalMessage(`Error creating indexing job: ${errorText}`); // Replaced alert with modal
+        setIsModalVisible(true);
       }
     } catch (error) {
       console.error("Error creating indexing job:", error);
-      alert("An error occurred while creating the job.");
+      setModalMessage("An error occurred while creating the job."); // Replaced alert with modal
+      setIsModalVisible(true);
     }
   };
 
   const handleTranscribe = async (contentId: string) => {
     console.log(contentId);
-    alert("Feature coming soon!");
+    setModalMessage("Feature coming soon!"); // Replaced alert with modal
+    setIsModalVisible(true);
     // if (!session) {
-    //   alert("Please log in to perform this action.");
+    //   setModalMessage("Please log in to perform this action."); // Replaced alert with modal
+    //   setIsModalVisible(true);
     //   return;
     // }
     // const accessToken = session.access_token;
@@ -254,19 +265,22 @@ export default function ChannelPage() {
     //     }),
     //   });
     //   if (response.ok) {
-    //     alert("Transcription job created successfully.");
+    //     setModalMessage("Transcription job created successfully."); // Replaced alert with modal
+    //     setIsModalVisible(true);
     //   } else {
     //     const errorText = await response.text();
-    //     alert(`Error creating transcription job: ${errorText}`);
+    //     setModalMessage(`Error creating transcription job: ${errorText}`); // Replaced alert with modal
+    //     setIsModalVisible(true);
     //   }
     // } catch (error) {
     //   console.error("Error creating transcription job:", error);
-    //   alert("An error occurred while creating the job.");
+    //   setModalMessage("An error occurred while creating the job."); // Replaced alert with modal
+    //   setIsModalVisible(true);
     // }
   };
 
   const videosToDisplay = search
-    ? searchResults.slice(0, visibleCount)
+    ? searchResults
     : videos.slice(0, visibleCount);
 
   return (
@@ -375,6 +389,11 @@ export default function ChannelPage() {
         </div>
       </div>
       <div ref={loader} />
+      <Modal
+        message={modalMessage}
+        isOpen={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+      />
     </div>
   );
 }
