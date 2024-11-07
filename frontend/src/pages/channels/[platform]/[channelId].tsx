@@ -54,12 +54,14 @@ export default function ChannelPage() {
   const [visibleCount, setVisibleCount] = useState(5); // Initialize visibility count
   const [pagefindInitialized, setPagefindInitialized] = useState(false);
   const platformStr = typeof platform === "string" ? platform : "";
-  const channelIdStr = typeof channelId === "string" ? channelId : "";
+  const channelIdStr =
+    typeof channelId === "string" ? channelId.toLowerCase() : "";
   const apiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "";
   const bucketUrl = process.env.NEXT_PUBLIC_BUCKET_URL || "";
 
   const platformIds: { [key: string]: number } = {
     youtube: 0,
+    twitch: 1, // Add Twitch platform ID
     // add other platforms here
   };
 
@@ -343,6 +345,8 @@ export default function ChannelPage() {
                         src={
                           platformStr === "youtube"
                             ? `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`
+                            : platformStr === "twitch"
+                            ? `https://static-cdn.jtvnw.net/previews-ttv/live_user_${video.id}-480x270.jpg`
                             : ""
                         }
                         alt={video.title}
