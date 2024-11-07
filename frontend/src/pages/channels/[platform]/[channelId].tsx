@@ -78,8 +78,8 @@ export default function ChannelPage() {
   };
 
   useEffect(() => {
-    if (channelId) {
-      const url = `${bucketUrl}/${platformNum}/${channelId}/index.json`;
+    if (channelIdStr) {
+      const url = `${bucketUrl}/${platformNum}/${channelIdStr}/index.json`;
       fetch(url)
         .then((response) => response.json())
         .then((data) => {
@@ -109,7 +109,7 @@ export default function ChannelPage() {
           setVideos([]);
         });
     }
-  }, [platformNum, channelId, bucketUrl]);
+  }, [platformNum, channelIdStr, bucketUrl]);
 
   // Modify performSearch to load initial batch
   useEffect(() => {
