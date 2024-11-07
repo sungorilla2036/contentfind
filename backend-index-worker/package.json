@@ -12,9 +12,10 @@
     "archiver": "^7.0.1",
     "aws-sdk": "^2.1691.0",
     "dotenv": "^16.4.5",
+    "fast-xml-parser": "^4.5.0",
     "glob": "^11.0.0",
+    "html-entities": "^2.5.2",
     "pagefind": "^1.1.1",
-    "srt-parser-2": "^1.2.3",
     "unzipper": "^0.12.3"
   }
 }

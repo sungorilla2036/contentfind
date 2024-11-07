@@ -5,8 +5,9 @@ import "dotenv/config";
 import fs from "fs";
 import { globSync } from "glob";
 import * as pagefind from "pagefind";
-import srtParser2 from "srt-parser-2";
+import { XMLParser } from "fast-xml-parser";
 import unzipper from "unzipper";
+import { decode } from "html-entities";
 
 // Add new environment variables for account ID and database ID
 const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID;
@@ -183,8 +184,9 @@ async function processJob(job, download_only) {
 
   // Download transcripts starting from newest video
   console.log("Downloading transcripts for new videos");
+  const transcriptExtension = "srv1";
   for (const video of videos) {
-    if (fs.existsSync(`${transcriptsFolder}/${video.id}.srt`)) {
+    if (fs.existsSync(`${transcriptsFolder}/${video.id}.json`)) {
       if (savedVideoData[video.id]) {
         video.upload_date = savedVideoData[video.id].date
           .toISOString()
@@ -197,10 +199,10 @@ async function processJob(job, download_only) {
 
     try {
       const videoJSON = await execCommand(
-        `yt-dlp --write-subs --write-auto-subs --dump-json --no-simulate --skip-download --no-warnings --sub-lang ".*orig" --convert-subs srt --output "${transcriptsFolder}/%(id)s.%(ext)s" https://www.youtube.com/watch?v=${video.id}`
+        `yt-dlp --write-subs --write-auto-subs --dump-json --no-simulate --skip-download --no-warnings --sub-lang ".*orig" --sub-format "${transcriptExtension}" --output "${transcriptsFolder}/%(id)s.%(ext)s" https://www.youtube.com/watch?v=${video.id}`
       );
       // check transcript was downloaded
-      const globPattern = `${transcriptsFolder}/${video.id}.*.srt`;
+      const globPattern = `${transcriptsFolder}/${video.id}.*.${transcriptExtension}`;
       console.log(globPattern);
       const transcriptFilesAfter = globSync(globPattern);
       console.log(transcriptFilesAfter);
@@ -213,7 +215,7 @@ async function processJob(job, download_only) {
         // rename transcript file
         fs.renameSync(
           transcriptFilesAfter[0],
-          `${transcriptsFolder}/${video.id}.srt`
+          `${transcriptsFolder}/${video.id}.${transcriptExtension}`
         );
         console.log(`Downloaded transcripts for video ID: ${video.id}`);
       } else {
@@ -255,15 +257,22 @@ async function processJob(job, download_only) {
 
     // Index all transcripts
     console.log("Indexing all transcripts");
-    const srtParser = new srtParser2();
+    const xmlParser = new XMLParser({ ignoreAttributes: false });
     for (const video of videos) {
-      const videoTranscriptPath = `${transcriptsFolder}/${video.id}.srt`;
+      const videoTranscriptPath = `${transcriptsFolder}/${video.id}.${transcriptExtension}`;
       if (fs.existsSync(videoTranscriptPath)) {
         const content = fs.readFileSync(videoTranscriptPath, "utf-8");
-        const parsedTranscript = srtParser.fromSrt(content);
+        const parsedTranscript = xmlParser.parse(content);
+
+        // Use createTranscriptArrayFromSrv1 to get both the transcript array and text lines
+        const transcriptArray = createTranscriptArrayFromSrv1(parsedTranscript);
+
+        // Extract text lines for indexing
+        const textLines = transcriptArray.map((item) => item[2]);
+
         index.addCustomRecord({
           url: video.id,
-          content: parsedTranscript.map((item) => item.text).join(" "),
+          content: textLines.join(" "),
           language: video.language,
           meta: {
             title: video.title,
@@ -272,6 +281,14 @@ async function processJob(job, download_only) {
             date: video.upload_date,
           },
         });
+
+        // Save the JSON file
+        fs.writeFileSync(
+          `${transcriptsFolder}/${video.id}.json`,
+          JSON.stringify(transcriptArray)
+        );
+        fs.unlinkSync(videoTranscriptPath); // Delete the srv1 file
+
         console.log(`Indexed transcript for video ID: ${video.id}`);
       }
     }
@@ -436,20 +453,42 @@ async function uploadFiles(
       .promise();
   }
 
-  // Upload new transcripts
+  // Upload new transcripts (JSON files only)
   for (const video of newVideos) {
-    const transcriptFile = `${transcriptsFolder}/${video.id}.srt`;
-    const fileContent = fs.readFileSync(transcriptFile);
-    const key = `${platform_id}/${channel_id}/transcripts/${video.id}.srt`;
+    // Upload JSON file
+    const transcriptJsonFile = `${transcriptsFolder}/${video.id}.json`;
+    const jsonContent = fs.readFileSync(transcriptJsonFile);
+    const jsonKey = `${platform_id}/${channel_id}/transcripts/${video.id}.json`;
     await s3
       .putObject({
         Bucket: bucketName,
-        Key: key,
-        Body: fileContent,
+        Key: jsonKey,
+        Body: jsonContent,
       })
       .promise();
   }
 }
+
+function createTranscriptArrayFromSrv1(parsedTranscript) {
+  const transcriptArray = [];
+  if (parsedTranscript.transcript && parsedTranscript.transcript.text) {
+    const textsArray = Array.isArray(parsedTranscript.transcript.text)
+      ? parsedTranscript.transcript.text
+      : [parsedTranscript.transcript.text];
+
+    for (const textEntry of textsArray) {
+      const start = parseFloat(textEntry["@_start"]) || 0;
+      const dur = parseFloat(textEntry["@_dur"]) || 0;
+      let text = textEntry["#text"] || "";
+      // Decode HTML entities
+      text = decode(text, { scope: "strict" });
+      transcriptArray.push([start, dur, text]);
+    }
+  }
+  return transcriptArray;
+}
+
+export { createTranscriptArrayFromSrv1 };
 
 async function main() {
   while (true) {
@@ -478,3 +517,20 @@ async function main() {
 }
 
 main();
+
+//clear s3 bucket
+// async function clearBucket() {
+//   const bucketName = process.env.R2_BUCKET_NAME;
+//   const params = {
+//     Bucket: bucketName,
+//   };
+//   const data = await s3.listObjects(params).promise();
+//   if (data.Contents.length === 0) return;
+//   const deleteParams = {
+//     Bucket: bucketName,
+//     Delete: { Objects: data.Contents.map((item) => ({ Key: item.Key })) },
+//   };
+//   await s3.deleteObjects(deleteParams).promise();
+//   if (data.IsTruncated) await clearBucket();
+// }
+// clearBucket();
