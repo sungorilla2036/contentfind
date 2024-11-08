@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
-import { useState, useEffect, useRef } from "react"; // Added useRef
+import { useState, useEffect, useRef, useCallback } from "react"; // Added useRef
 import Modal from "@/components/Modal"; // Import the Modal component
 
 declare global {
@@ -16,6 +16,44 @@ import MenuBar from "@/components/MenuBar";
 import { useSession } from "@supabase/auth-helpers-react";
 import Script from "next/script";
 
+export type HelixVideoViewableStatus = "public" | "private";
+export type HelixVideoType = "upload" | "archive" | "highlight";
+/**
+ * Data about a muted segment in a video.
+ */
+export interface HelixVideoMutedSegmentData {
+  /**
+   * The start of the muted segment, in seconds from the start.
+   */
+  offset: number;
+  /**
+   * The duration of the muted segment, in seconds.
+   */
+  duration: number;
+}
+/** @private */
+export interface HelixVideoData {
+  id: string;
+  user_id: string;
+  user_login: string;
+  user_name: string;
+  title: string;
+  description: string;
+  created_at: string;
+  published_at: string;
+  url: string;
+  thumbnail_url: string;
+  viewable: HelixVideoViewableStatus;
+  view_count: number;
+  language: string;
+  type: HelixVideoType;
+  duration: string;
+  stream_id: string | null;
+  muted_segments: HelixVideoMutedSegmentData[] | null;
+}
+export type HelixVideoFilterPeriod = "all" | "day" | "week" | "month";
+export type HelixVideoSort = "time" | "trending" | "views";
+
 // Update the Video type if necessary
 type Video = {
   id: string;
@@ -23,6 +61,7 @@ type Video = {
   date: number;
   transcriptAvailable: boolean;
   excerpt?: string; // Added excerpt for search results
+  thumbnail_url?: string; // Add thumbnail_url property
 };
 
 type SearchResult = {
@@ -53,6 +92,12 @@ export default function ChannelPage() {
   const [searchResults, setSearchResults] = useState<Video[]>([]); // Visible search results
   const [visibleCount, setVisibleCount] = useState(5); // Initialize visibility count
   const [pagefindInitialized, setPagefindInitialized] = useState(false);
+  const [twitchPaginationCursor, setTwitchPaginationCursor] = useState<
+    string | null
+  >(null);
+  const [twitchBroadcasterId, setTwitchBroadcasterId] = useState<string | null>(
+    null
+  );
   const platformStr = typeof platform === "string" ? platform : "";
   const channelIdStr =
     typeof channelId === "string" ? channelId.toLowerCase() : "";
@@ -77,39 +122,140 @@ export default function ChannelPage() {
     return date.toLocaleDateString();
   };
 
-  useEffect(() => {
-    if (channelIdStr) {
-      const url = `${bucketUrl}/${platformNum}/${channelIdStr}/index.json`;
-      fetch(url)
-        .then((response) => response.json())
-        .then((data) => {
-          setIsIndexed(true);
-          const channelLastUpdated = data[0];
-          const videosData = data[1];
-          const date = new Date(channelLastUpdated * 24 * 60 * 60 * 1000);
-          setLastUpdatedDate(date);
-          const videosList = videosData.map(
-            (videoData: [string, string, number, string, number?]) => {
-              const [id, title, dateNumber, language, transcriptFlag] =
-                videoData;
-              return {
-                id,
-                title,
-                date: dateNumber,
-                language: language,
-                transcriptAvailable: transcriptFlag !== 0,
-              } as Video;
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchTwitchVideos = useCallback(
+    async (cursor?: string) => {
+      if (isLoading) return;
+
+      // Stop if we've reached the end
+      if (!cursor && videos.length > 0) {
+        return;
+      }
+      setIsLoading(true);
+      try {
+        const accessToken =
+          session?.provider_token || localStorage.getItem("provider_token");
+        if (!accessToken || session?.user.app_metadata.provider !== "twitch") {
+          return;
+        }
+        // Get broadcaster ID
+        let broadcasterId = twitchBroadcasterId;
+        if (!broadcasterId) {
+          const broadcasterResponse = await fetch(
+            `https://api.twitch.tv/helix/users?login=${channelIdStr}`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Client-Id": process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID || "",
+              },
             }
           );
-          setVideos(videosList);
-        })
-        .catch(() => {
+          const broadcasterData = await broadcasterResponse.json();
+          if (broadcasterData.data && broadcasterData.data.length > 0) {
+            broadcasterId = broadcasterData.data[0].id;
+            setTwitchBroadcasterId(broadcasterId);
+          } else {
+            setModalMessage("Broadcaster not found.");
+            setIsModalVisible(true);
+            return;
+          }
+        }
+        // Get videos of type 'archive'
+        const videosResponse = await fetch(
+          `https://api.twitch.tv/helix/videos?user_id=${broadcasterId}&type=archive${
+            cursor ? `&after=${cursor}` : ""
+          }`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Client-Id": process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID || "",
+            },
+          }
+        );
+        const videosData = await videosResponse.json();
+        const newCursor = videosData.pagination?.cursor || null;
+        setTwitchPaginationCursor(newCursor);
+        const videosList = videosData.data.map((video: HelixVideoData) => ({
+          id: video.id,
+          title: video.title,
+          date: new Date(video.created_at).getTime() / (24 * 60 * 60 * 1000),
+          transcriptAvailable: false,
+          thumbnail_url: video.thumbnail_url
+            .replace("%{width}", "320")
+            .replace("%{height}", "180"),
+        }));
+        setVideos((prevVideos) => [...prevVideos, ...videosList]);
+      } catch (error) {
+        console.error("Error fetching Twitch videos:", error);
+        setModalMessage("Error fetching Twitch videos.");
+        setIsModalVisible(true);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isLoading, videos.length, session, twitchBroadcasterId, channelIdStr]
+  );
+
+  useEffect(() => {
+    if (channelIdStr) {
+      if (platformStr === "twitch") {
+        const accessToken =
+          session?.provider_token || localStorage.getItem("provider_token");
+        if (!accessToken || session?.user.app_metadata.provider !== "twitch") {
           setIsIndexed(false);
           setLastUpdatedDate(null);
           setVideos([]);
-        });
+          return;
+        }
+        fetchTwitchVideos(); // Call the function here
+      } else {
+        const url = `${bucketUrl}/${platformNum}/${channelIdStr}/index.json`;
+        fetch(url)
+          .then((response) => response.json())
+          .then((data) => {
+            setIsIndexed(true);
+            const channelLastUpdated = data[0];
+            const videosData = data[1];
+            const date = new Date(channelLastUpdated * 24 * 60 * 60 * 1000);
+            setLastUpdatedDate(date);
+            const videosList = videosData.map(
+              (videoData: [string, string, number, string, number?]) => {
+                const [id, title, dateNumber, language, transcriptFlag] =
+                  videoData;
+                return {
+                  id,
+                  title,
+                  date: dateNumber,
+                  language: language,
+                  transcriptAvailable: transcriptFlag !== 0,
+                } as Video;
+              }
+            );
+            setVideos(videosList);
+          })
+          .catch(() => {
+            setIsIndexed(false);
+            setLastUpdatedDate(null);
+            setVideos([]);
+          });
+      }
     }
-  }, [platformNum, channelIdStr, bucketUrl]);
+  }, [
+    channelIdStr,
+    platformStr,
+    session,
+    platformNum,
+    bucketUrl,
+    fetchTwitchVideos,
+  ]);
+
+  // Cache provider_token to localStorage
+  useEffect(() => {
+    if (session?.provider_token) {
+      localStorage.setItem("provider_token", session.provider_token);
+    }
+  }, [session?.provider_token]);
 
   // Modify performSearch to load initial batch
   useEffect(() => {
@@ -182,11 +328,35 @@ export default function ChannelPage() {
   }, [fullSearchResults, visibleCount, videos]);
 
   const loader = useRef<HTMLDivElement | null>(null); // Added ref for loader
+  const handleIntersection = useCallback(() => {
+    if (search) {
+      setVisibleCount((prevCount) =>
+        Math.min(prevCount + 5, fullSearchResults.length)
+      );
+    } else {
+      if (
+        platformStr === "twitch" &&
+        visibleCount >= videos.length &&
+        twitchPaginationCursor
+      ) {
+        fetchTwitchVideos(twitchPaginationCursor);
+      }
+      setVisibleCount((prevCount) => Math.min(prevCount + 5, videos.length));
+    }
+  }, [
+    fetchTwitchVideos,
+    fullSearchResults.length,
+    platformStr,
+    search,
+    twitchPaginationCursor,
+    videos.length,
+    visibleCount,
+  ]);
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setVisibleCount((prevCount) => prevCount + 5);
+          handleIntersection();
         }
       },
       { threshold: 1 }
@@ -202,7 +372,7 @@ export default function ChannelPage() {
         observer.unobserve(elem);
       }
     };
-  }, []);
+  }, [handleIntersection, loader]);
 
   const [modalMessage, setModalMessage] = useState(""); // Added state for modal message
   const [isModalVisible, setIsModalVisible] = useState(false); // Added state for modal visibility
@@ -306,12 +476,14 @@ export default function ChannelPage() {
               initialChannelId={typeof channelId === "string" ? channelId : ""}
             />
             <div className="space-y-4 mt-2">
-              <Input
-                type="text"
-                placeholder="Search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              {isIndexed && platformStr !== "twitch" && (
+                <Input
+                  type="text"
+                  placeholder="Search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              )}
 
               {lastUpdatedDate && (
                 <div className="flex items-center mt-2">
@@ -333,7 +505,9 @@ export default function ChannelPage() {
                 </div>
               )}
 
-              {isIndexed ? (
+              {isIndexed ||
+              (platformStr === "twitch" &&
+                session?.user.app_metadata.provider === "twitch") ? (
                 <div className="space-y-4">
                   {videosToDisplay.map((video) => (
                     <div
@@ -345,8 +519,8 @@ export default function ChannelPage() {
                         src={
                           platformStr === "youtube"
                             ? `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`
-                            : platformStr === "twitch"
-                            ? `https://static-cdn.jtvnw.net/previews-ttv/live_user_${video.id}-480x270.jpg`
+                            : platformStr === "twitch" && video.thumbnail_url
+                            ? video.thumbnail_url
                             : ""
                         }
                         alt={video.title}
@@ -384,8 +558,17 @@ export default function ChannelPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <p className="mb-4">Channel not indexed</p>
-                  <Button onClick={handleReindex}>Index</Button>
+                  {platformStr === "twitch" &&
+                  session?.user.app_metadata.provider !== "twitch" ? (
+                    <p className="mb-4">
+                      Please log in with Twitch to view this Twitch channel.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="mb-4">Channel not indexed</p>
+                      <Button onClick={handleReindex}>Index</Button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

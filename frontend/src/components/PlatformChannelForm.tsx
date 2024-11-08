@@ -38,6 +38,7 @@ export default function PlatformChannelForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="youtube">YouTube</SelectItem>
+            <SelectItem value="twitch">Twitch</SelectItem>
           </SelectContent>
         </Select>
         <Input
