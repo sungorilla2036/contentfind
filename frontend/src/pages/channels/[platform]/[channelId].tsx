@@ -419,7 +419,9 @@ export default function ChannelPage() {
       });
 
       if (res.ok) {
-        setModalMessage("Indexing job created successfully."); // Replaced alert with modal
+        setModalMessage(
+          "Indexing job queued successfully. Check back in a few minutes! \n\nNote: channels with more transcripts will take longer to index."
+        ); // Replaced alert with modal
         setIsModalVisible(true);
         setIsIndexed(true);
       } else {

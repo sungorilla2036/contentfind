@@ -164,6 +164,14 @@ export default function VideoPage() {
       if (response.ok) {
         setModalMessage("Clip created successfully!");
         setIsModalVisible(true);
+        setClips((prevClips) => [
+          ...prevClips,
+          {
+            start_time: payload.start_time,
+            duration: payload.duration,
+            title: payload.title,
+          },
+        ]); // Add new clip to state
         // Reset form fields
         setStartTime("");
         setEndTime(""); // Reset end time
