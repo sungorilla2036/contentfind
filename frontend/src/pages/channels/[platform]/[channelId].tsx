@@ -98,9 +98,6 @@ export default function ChannelPage() {
   const [twitchBroadcasterId, setTwitchBroadcasterId] = useState<string | null>(
     null
   );
-  const platformStr = typeof platform === "string" ? platform : "";
-  const channelIdStr =
-    typeof channelId === "string" ? channelId.toLowerCase() : "";
   const apiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "";
   const bucketUrl = process.env.NEXT_PUBLIC_BUCKET_URL || "";
 
@@ -109,8 +106,7 @@ export default function ChannelPage() {
     twitch: 1, // Add Twitch platform ID
     // add other platforms here
   };
-
-  const platformNum = platformIds[platformStr] || 0;
+  const platformNum = platformIds[platform as string] || 0;
 
   const handleVideoClick = (videoId: string): void => {
     router.push(`/channels/${platform}/${channelId}/${videoId}`);
@@ -123,9 +119,10 @@ export default function ChannelPage() {
   };
 
   const [isLoading, setIsLoading] = useState(false);
+  const [needsLoadTwitch, setNeedsLoadTwitch] = useState(false);
 
   const fetchTwitchVideos = useCallback(
-    async (cursor?: string) => {
+    async (isFirstLoad: boolean = false, cursor?: string) => {
       if (isLoading) return;
 
       // Stop if we've reached the end
@@ -142,8 +139,40 @@ export default function ChannelPage() {
         // Get broadcaster ID
         let broadcasterId = twitchBroadcasterId;
         if (!broadcasterId) {
-          const broadcasterResponse = await fetch(
-            `https://api.twitch.tv/helix/users?login=${channelIdStr}`,
+          await fetch(`https://api.twitch.tv/helix/users?login=${channelId}`, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Client-Id": process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID || "",
+            },
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.data && data.data.length > 0) {
+                broadcasterId = data.data[0].id;
+                setTwitchBroadcasterId(broadcasterId);
+              } else if (
+                data.status === 401 &&
+                data.message === "Invalid OAuth token"
+              ) {
+                localStorage.removeItem("provider_token");
+                setModalMessage("Please log in again.");
+                setIsModalVisible(true);
+              } else {
+                setModalMessage("Broadcaster not found.");
+                setIsModalVisible(true);
+              }
+            })
+            .catch((error) => {
+              console.error(error);
+            });
+        }
+        let videosList: Video[] = [];
+        if (broadcasterId) {
+          // Get videos of type 'archive'
+          const videosResponse = await fetch(
+            `https://api.twitch.tv/helix/videos?user_id=${broadcasterId}&type=archive${
+              cursor ? `&after=${cursor}` : ""
+            }`,
             {
               headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -151,41 +180,25 @@ export default function ChannelPage() {
               },
             }
           );
-          const broadcasterData = await broadcasterResponse.json();
-          if (broadcasterData.data && broadcasterData.data.length > 0) {
-            broadcasterId = broadcasterData.data[0].id;
-            setTwitchBroadcasterId(broadcasterId);
-          } else {
-            setModalMessage("Broadcaster not found.");
-            setIsModalVisible(true);
-            return;
-          }
+          const videosData = await videosResponse.json();
+          const newCursor = videosData.pagination?.cursor || null;
+          setTwitchPaginationCursor(newCursor);
+          videosList = videosData.data.map((video: HelixVideoData) => ({
+            id: video.id,
+            title: video.title,
+            date: new Date(video.created_at).getTime() / (24 * 60 * 60 * 1000),
+            transcriptAvailable: false,
+            thumbnail_url: video.thumbnail_url
+              .replace("%{width}", "320")
+              .replace("%{height}", "180"),
+          }));
         }
-        // Get videos of type 'archive'
-        const videosResponse = await fetch(
-          `https://api.twitch.tv/helix/videos?user_id=${broadcasterId}&type=archive${
-            cursor ? `&after=${cursor}` : ""
-          }`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Client-Id": process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID || "",
-            },
-          }
-        );
-        const videosData = await videosResponse.json();
-        const newCursor = videosData.pagination?.cursor || null;
-        setTwitchPaginationCursor(newCursor);
-        const videosList = videosData.data.map((video: HelixVideoData) => ({
-          id: video.id,
-          title: video.title,
-          date: new Date(video.created_at).getTime() / (24 * 60 * 60 * 1000),
-          transcriptAvailable: false,
-          thumbnail_url: video.thumbnail_url
-            .replace("%{width}", "320")
-            .replace("%{height}", "180"),
-        }));
-        setVideos((prevVideos) => [...prevVideos, ...videosList]);
+
+        if (isFirstLoad) {
+          setVideos([...videosList]);
+        } else {
+          setVideos((prevVideos) => [...prevVideos, ...videosList]);
+        }
       } catch (error) {
         console.error("Error fetching Twitch videos:", error);
         setModalMessage("Error fetching Twitch videos.");
@@ -194,23 +207,38 @@ export default function ChannelPage() {
         setIsLoading(false);
       }
     },
-    [isLoading, videos.length, session, twitchBroadcasterId, channelIdStr]
+    [
+      isLoading,
+      videos.length,
+      session?.provider_token,
+      session?.user.app_metadata.provider,
+      twitchBroadcasterId,
+      channelId,
+    ]
   );
 
   useEffect(() => {
-    if (channelIdStr) {
-      if (platformStr === "twitch") {
-        const accessToken =
-          session?.provider_token || localStorage.getItem("provider_token");
-        if (!accessToken || session?.user.app_metadata.provider !== "twitch") {
-          setIsIndexed(false);
-          setLastUpdatedDate(null);
-          setVideos([]);
-          return;
-        }
-        fetchTwitchVideos(); // Call the function here
+    if (needsLoadTwitch) {
+      fetchTwitchVideos(true);
+      setNeedsLoadTwitch(false);
+    }
+  }, [fetchTwitchVideos, needsLoadTwitch]);
+
+  useEffect(() => {
+    if (channelId) {
+      setIsIndexed(false);
+      setLastUpdatedDate(null);
+      setVideos([]);
+      setSearch("");
+      setSearchResults([]);
+      setFullSearchResults([]);
+      setVisibleCount(5);
+      if (platform === "twitch") {
+        setNeedsLoadTwitch(true);
       } else {
-        const url = `${bucketUrl}/${platformNum}/${channelIdStr}/index.json`;
+        const url = `${bucketUrl}/0/${channelId
+          .toString()
+          .toLowerCase()}/index.json`;
         fetch(url)
           .then((response) => response.json())
           .then((data) => {
@@ -235,20 +263,11 @@ export default function ChannelPage() {
             setVideos(videosList);
           })
           .catch(() => {
-            setIsIndexed(false);
-            setLastUpdatedDate(null);
             setVideos([]);
           });
       }
     }
-  }, [
-    channelIdStr,
-    platformStr,
-    session,
-    platformNum,
-    bucketUrl,
-    fetchTwitchVideos,
-  ]);
+  }, [channelId, platform, bucketUrl]);
 
   // Cache provider_token to localStorage
   useEffect(() => {
@@ -268,7 +287,9 @@ export default function ChannelPage() {
         ) {
           await window.pagefind.options({
             baseUrl: window.location.href,
-            basePath: `${bucketUrl}/${platformNum}/${channelIdStr}/pagefind`,
+            basePath: `${bucketUrl}/${platformNum}/${channelId
+              ?.toString()
+              .toLowerCase()}/pagefind`,
           });
           window.pagefind.init();
           setPagefindInitialized(true);
@@ -293,7 +314,7 @@ export default function ChannelPage() {
       }
     };
     performSearch();
-  }, [search, platformNum, channelIdStr, bucketUrl, pagefindInitialized]);
+  }, [search, platformNum, channelId, bucketUrl, pagefindInitialized]);
 
   useEffect(() => {
     const loadMoreResults = async () => {
@@ -335,18 +356,18 @@ export default function ChannelPage() {
       );
     } else {
       if (
-        platformStr === "twitch" &&
+        platform === "twitch" &&
         visibleCount >= videos.length &&
         twitchPaginationCursor
       ) {
-        fetchTwitchVideos(twitchPaginationCursor);
+        fetchTwitchVideos(false, twitchPaginationCursor);
       }
       setVisibleCount((prevCount) => Math.min(prevCount + 5, videos.length));
     }
   }, [
     fetchTwitchVideos,
     fullSearchResults.length,
-    platformStr,
+    platform,
     search,
     twitchPaginationCursor,
     videos.length,
@@ -393,7 +414,7 @@ export default function ChannelPage() {
         },
         body: JSON.stringify({
           platform_id: platformNum,
-          channel_id: channelIdStr,
+          channel_id: channelId?.toString().toLowerCase(),
         }),
       });
 
@@ -476,7 +497,7 @@ export default function ChannelPage() {
               initialChannelId={typeof channelId === "string" ? channelId : ""}
             />
             <div className="space-y-4 mt-2">
-              {isIndexed && platformStr !== "twitch" && (
+              {isIndexed && platform !== "twitch" && (
                 <Input
                   type="text"
                   placeholder="Search"
@@ -505,9 +526,7 @@ export default function ChannelPage() {
                 </div>
               )}
 
-              {isIndexed ||
-              (platformStr === "twitch" &&
-                session?.user.app_metadata.provider === "twitch") ? (
+              {videosToDisplay && (
                 <div className="space-y-4">
                   {videosToDisplay.map((video) => (
                     <div
@@ -517,9 +536,9 @@ export default function ChannelPage() {
                     >
                       <img
                         src={
-                          platformStr === "youtube"
+                          platform === "youtube"
                             ? `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`
-                            : platformStr === "twitch" && video.thumbnail_url
+                            : platform === "twitch" && video.thumbnail_url
                             ? video.thumbnail_url
                             : ""
                         }
@@ -556,21 +575,41 @@ export default function ChannelPage() {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  {platformStr === "twitch" &&
-                  session?.user.app_metadata.provider !== "twitch" ? (
+              )}
+              <div className="text-center py-8">
+                {platform === "twitch" ? (
+                  // Twitch channel logic
+                  !session?.user.app_metadata.provider ? (
+                    // No session/provider
                     <p className="mb-4">
                       Please log in with Twitch to view this Twitch channel.
                     </p>
+                  ) : session?.user.app_metadata.provider !== "twitch" ? (
+                    // Wrong provider
+                    <p className="mb-4">
+                      Please log in with Twitch (not{" "}
+                      {session.user.app_metadata.provider}) to view this
+                      channel.
+                    </p>
                   ) : (
+                    !session?.provider_token &&
+                    !localStorage.getItem("provider_token") && (
+                      // No token
+                      <p className="mb-4">
+                        Please log in again with Twitch to view this channel.
+                      </p>
+                    )
+                  )
+                ) : (
+                  // Non-Twitch channel
+                  !isIndexed && (
                     <>
                       <p className="mb-4">Channel not indexed</p>
                       <Button onClick={handleReindex}>Index</Button>
                     </>
-                  )}
-                </div>
-              )}
+                  )
+                )}
+              </div>
             </div>
           </div>
         </div>
