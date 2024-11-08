@@ -20,6 +20,11 @@ export default function VideoPage() {
   const bucketUrl = process.env.NEXT_PUBLIC_BUCKET_URL || "";
   const twitchEmbedRef = useRef<HTMLDivElement>(null);
   const embedInitialized = useRef(false);
+  interface TwitchPlayer {
+    seek: (time: number) => void;
+  }
+
+  const playerInstanceRef = useRef<TwitchPlayer | null>(null); // Add this line
 
   const platformIds: { [key: string]: number } = {
     youtube: 0,
@@ -43,7 +48,7 @@ export default function VideoPage() {
 
       // Set embed URL based on platform
       if (platform === "youtube") {
-        setEmbedUrl(`https://www.youtube.com/embed/${videoId}`);
+        setEmbedUrl(`https://www.youtube.com/embed/${videoId}?enablejsapi=1`); // Modified line
       } else if (platform === "twitch") {
         setEmbedUrl(""); // Clear embedUrl since we'll use the Twitch Embed API
 
@@ -62,7 +67,8 @@ export default function VideoPage() {
             });
 
             embed.addEventListener(window.Twitch.Embed.VIDEO_READY, () => {
-              // You can now use 'player' to control playback
+              const player = embed.getPlayer(); // Add this line
+              playerInstanceRef.current = player; // Add this line
             });
 
             embedInitialized.current = true;
@@ -83,6 +89,19 @@ export default function VideoPage() {
       }
     }
   }, [platform, channelId, videoId, platformNum, bucketUrl]);
+
+  const handleSeek = (time: number) => {
+    if (platform === "youtube") {
+      document
+        .querySelector("iframe")
+        ?.contentWindow?.postMessage(
+          '{"event":"command","func":"seekTo","args":[' + time + "]}",
+          "*"
+        );
+    } else if (platform === "twitch" && playerInstanceRef.current) {
+      playerInstanceRef.current.seek(time);
+    }
+  };
 
   return (
     <div>
@@ -118,11 +137,25 @@ export default function VideoPage() {
             <div className="space-y-6">
               <div>
                 <h2 className="text-xl font-semibold mb-3">Transcript</h2>
-                <div className="space-y-2">
+                <div className="h-[600px] overflow-y-auto pr-4">
                   {transcript.map((line, index) => (
-                    <p key={index} className="text-gray-700">
-                      {line[2]}
-                    </p>
+                    <div
+                      key={index}
+                      className="p-1 rounded hover:bg-gray-100 cursor-pointer transition-colors duration-200 group relative"
+                      onClick={() => handleSeek(line[0])}
+                      title={
+                        new Date(line[0] * 1000).toISOString().slice(11, 19) +
+                        "-" +
+                        new Date((line[0] + line[1]) * 1000)
+                          .toISOString()
+                          .slice(11, 19)
+                      }
+                    >
+                      <span className="text-gray-700">{line[2]}</span>
+                      <span className="absolute right-2 top-2 text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        {new Date(line[0] * 1000).toISOString().slice(11, 19)}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
