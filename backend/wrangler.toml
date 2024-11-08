@@ -57,6 +57,16 @@ binding = "CF_USERS"
 database_name = "contentfind-users"
 database_id = "9509e4a6-10e3-48ae-b00e-157f24f85752"
 
+[[d1_databases]]
+binding = "CF_YOUTUBE_CLIPS"
+database_name = "contentfind-youtube-clips"
+database_id = "ab4261e0-7e39-4438-b226-1330400518f6"
+
+[[d1_databases]]
+binding = "CF_TWITCH_CLIPS"
+database_name = "contentfind-twitch-clips"
+database_id = "603cecc9-3740-4f68-8848-95076061d476"
+
 # Bind a dispatch namespace. Use Workers for Platforms to deploy serverless functions programmatically on behalf of your customers.
 # Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#dispatch-namespace-bindings-workers-for-platforms
 # [[dispatch_namespaces]]

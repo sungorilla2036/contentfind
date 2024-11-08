@@ -54,6 +54,18 @@ function uuidToBigint(uuid: string) {
 	return BigInt(`0x${uuid.replace(/-/g, '')}`);
 }
 
+// Function to select the appropriate D1 database based on platform
+function getClipsDb(platform: string, env: Env) {
+	switch (platform.toLowerCase()) {
+		case 'youtube':
+			return env.CF_YOUTUBE_CLIPS;
+		case 'twitch':
+			return env.CF_TWITCH_CLIPS;
+		default:
+			throw new Error('Unsupported platform');
+	}
+}
+
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		// Handle CORS preflight requests
@@ -71,7 +83,12 @@ export default {
 			try {
 				const authHeader = request.headers.get('Authorization');
 				if (!authHeader) {
-					return new Response('Unauthorized', { status: 401 });
+					return new Response('Unauthorized', {
+						status: 401,
+						headers: {
+							'Access-Control-Allow-Origin': '*',
+						},
+					});
 				}
 
 				const token = authHeader.split(' ')[1];
@@ -79,7 +96,12 @@ export default {
 
 				// Check if expired
 				if (decoded.exp < Date.now() / 1000) {
-					return new Response('Unauthorized', { status: 401 });
+					return new Response('Unauthorized', {
+						status: 401,
+						headers: {
+							'Access-Control-Allow-Origin': '*',
+						},
+					});
 				}
 
 				const usersDb = env.CF_USERS;
@@ -153,7 +175,12 @@ export default {
 				if (content_id) {
 					// TODO get content duration and calculate credits required
 					if (user.credits < 1) {
-						return new Response('Insufficient credits', { status: 403 });
+						return new Response('Insufficient credits', {
+							status: 403,
+							headers: {
+								'Access-Control-Allow-Origin': '*',
+							},
+						});
 					}
 				}
 
@@ -229,6 +256,117 @@ export default {
 				});
 			}
 		}
+
+		if (request.method === 'POST' && new URL(request.url).pathname === '/clips') {
+			try {
+				const authHeader = request.headers.get('Authorization');
+				if (!authHeader) {
+					return new Response('Unauthorized', {
+						status: 401,
+						headers: {
+							'Access-Control-Allow-Origin': '*',
+						},
+					});
+				}
+
+				const token = authHeader.split(' ')[1];
+				const decoded = verify(token, env.jwt_secret) as SupabaseJWTPayload;
+
+				// Check if expired
+				if (decoded.exp < Date.now() / 1000) {
+					return new Response('Unauthorized', {
+						status: 401,
+						headers: {
+							'Access-Control-Allow-Origin': '*',
+						},
+					});
+				}
+
+				const userID = uuidToBigint(decoded.sub).toString();
+
+				const { platform, channel_id, content_id, start_time, duration, title } = (await request.json()) as {
+					platform: string;
+					channel_id: string;
+					content_id: string;
+					start_time: number;
+					duration: number;
+					title?: string;
+				};
+
+				const clipsDb = getClipsDb(platform, env);
+
+				await clipsDb
+					.prepare(
+						`
+					INSERT INTO clips (channel_id, content_id, start_time, duration, title, user_id)
+					VALUES (?, ?, ?, ?, ?, ${userID})
+				`
+					)
+					.bind(channel_id, content_id, start_time, duration, title || '')
+					.run();
+
+				return new Response('Clip created successfully', {
+					status: 201,
+					headers: {
+						'Access-Control-Allow-Origin': '*',
+					},
+				});
+			} catch (error) {
+				console.error(error);
+				return new Response('Error creating clip', {
+					status: 400,
+					headers: {
+						'Access-Control-Allow-Origin': '*',
+					},
+				});
+			}
+		}
+
+		if (request.method === 'GET' && /^\/videos\/[^\/]+\/clips$/.test(new URL(request.url).pathname)) {
+			try {
+				const url = new URL(request.url);
+				const segments = url.pathname.split('/');
+				const videoId = segments[2];
+				const platform = url.searchParams.get('platform');
+
+				if (!platform) {
+					return new Response('Platform query parameter is required', {
+						status: 400,
+						headers: {
+							'Access-Control-Allow-Origin': '*',
+						},
+					});
+				}
+
+				const clipsDb = getClipsDb(platform, env);
+
+				const clips = await clipsDb
+					.prepare(
+						`
+					SELECT * FROM clips WHERE content_id = ?
+				`
+					)
+					.bind(videoId)
+					.all();
+
+				return new Response(JSON.stringify(clips.results), {
+					status: 200,
+					headers: {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+					},
+				});
+			} catch (error) {
+				console.error(error);
+				return new Response('Error fetching clips', {
+					status: 400,
+					headers: {
+						'Access-Control-Allow-Origin': '*',
+					},
+				});
+			}
+		}
+
 		return new Response('Not found', {
 			status: 404,
 			headers: {

@@ -39,6 +39,17 @@
 | channel_id  | string |
 | credits     | int    |
 
+## clips
+
+| Field       | Type   |
+|-------------|--------|
+| channel_id  | string |
+| content_id  | string |
+| start_time  | int    |
+| duration    | int    |
+| text        | text   |
+| user_id     | uuid   |
+
 # Routes
 ## POST /jobs
 ### Payload
