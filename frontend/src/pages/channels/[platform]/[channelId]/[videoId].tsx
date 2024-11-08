@@ -41,7 +41,7 @@ export default function VideoPage() {
   const [modalMessage, setModalMessage] = useState(""); // Added state for modal
   const [isModalVisible, setIsModalVisible] = useState(false); // Added state for modal visibility
   const [startTime, setStartTime] = useState(""); // Added state for start time
-  const [duration, setDuration] = useState(""); // Added state for duration
+  const [endTime, setEndTime] = useState(""); // Added state for end time
   const [title, setTitle] = useState(""); // Added state for title
   const [clips, setClips] = useState<
     { start_time: number; duration: number; title: string }[]
@@ -137,12 +137,14 @@ export default function VideoPage() {
       return;
     }
 
+    const duration = parseInt(endTime, 10) - parseInt(startTime, 10); // Calculated duration
+
     const payload = {
       platform: platform as string,
       channel_id: channelId as string,
       content_id: videoId as string,
       start_time: parseInt(startTime, 10),
-      duration: parseInt(duration, 10),
+      duration, // Use calculated duration
       title,
     };
 
@@ -164,7 +166,7 @@ export default function VideoPage() {
         setIsModalVisible(true);
         // Reset form fields
         setStartTime("");
-        setDuration("");
+        setEndTime(""); // Reset end time
         setTitle("");
       } else {
         const errorData = await response.text();
@@ -210,31 +212,43 @@ export default function VideoPage() {
             )}
 
             {/* Clip Maker Form */}
-            <form onSubmit={handleCreateClip} className="mb-6">
-              <h2 className="text-xl font-semibold mb-3">Create a Clip</h2>
-              <div className="space-y-4">
-                <Input
-                  type="number"
-                  placeholder="Start Time (seconds)"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  required
-                />
-                <Input
-                  type="number"
-                  placeholder="Duration (seconds)"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  required
-                />
+            <form
+              onSubmit={handleCreateClip}
+              className="bg-white p-3 border border-gray-200 rounded"
+            >
+              <h2 className="text-sm font-medium text-gray-700 mb-2">
+                Create a Clip
+              </h2>
+              <div className="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-2 md:space-y-0">
+                <div className="grid grid-cols-2 gap-2 md:flex md:space-x-2">
+                  <Input
+                    type="number"
+                    placeholder="Start (s)"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    required
+                    className="w-24"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="End (s)"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    required
+                    className="w-24"
+                  />
+                </div>
                 <Input
                   type="text"
-                  placeholder="Title"
+                  placeholder="Clip Title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
+                  className="flex-1"
                 />
-                <Button type="submit">Create Clip</Button>
+                <Button type="submit" className="md:w-auto">
+                  Clip
+                </Button>
               </div>
             </form>
 
@@ -245,7 +259,7 @@ export default function VideoPage() {
               onClose={() => setIsModalVisible(false)}
             />
 
-            <div className="space-y-6">
+            <div className="space-y-6 mt-6">
               <div>
                 <h2 className="text-xl font-semibold mb-3">Transcript</h2>
                 <div className="h-[600px] overflow-y-auto pr-4">
@@ -303,24 +317,14 @@ export default function VideoPage() {
                             <span>
                               {new Date(clip.start_time * 1000)
                                 .toISOString()
-                                .substr(11, 8)}
+                                .slice(11, 19) +
+                                " - " +
+                                new Date(
+                                  (clip.start_time + clip.duration) * 1000
+                                )
+                                  .toISOString()
+                                  .slice(11, 19)}
                             </span>
-                          </div>
-                          <div className="flex items-center">
-                            <svg
-                              className="w-4 h-4 mr-1"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                              />
-                            </svg>
-                            <span>{clip.duration}s</span>
                           </div>
                         </div>
                       </div>
