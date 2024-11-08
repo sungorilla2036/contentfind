@@ -1,7 +1,15 @@
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import Script from "next/script";
 import MenuBar from "@/components/MenuBar";
 import PlatformChannelForm from "@/components/PlatformChannelForm";
+
+declare global {
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Twitch: any;
+  }
+}
 
 export default function VideoPage() {
   const router = useRouter();
@@ -10,6 +18,8 @@ export default function VideoPage() {
   const [transcript, setTranscript] = useState<[number, number, string][]>([]);
   const [embedUrl, setEmbedUrl] = useState<string>("");
   const bucketUrl = process.env.NEXT_PUBLIC_BUCKET_URL || "";
+  const twitchEmbedRef = useRef<HTMLDivElement>(null);
+  const embedInitialized = useRef(false);
 
   const platformIds: { [key: string]: number } = {
     youtube: 0,
@@ -35,15 +45,48 @@ export default function VideoPage() {
       if (platform === "youtube") {
         setEmbedUrl(`https://www.youtube.com/embed/${videoId}`);
       } else if (platform === "twitch") {
-        setEmbedUrl(
-          `https://player.twitch.tv/?video=${videoId}&parent=yourdomain.com&autoplay=false`
-        );
+        setEmbedUrl(""); // Clear embedUrl since we'll use the Twitch Embed API
+
+        const initializeTwitchEmbed = () => {
+          if (
+            twitchEmbedRef.current &&
+            window.Twitch &&
+            !embedInitialized.current
+          ) {
+            const embed = new window.Twitch.Embed(twitchEmbedRef.current, {
+              width: "100%",
+              height: "400",
+              video: videoId,
+              layout: "video",
+              autoplay: false,
+            });
+
+            embed.addEventListener(window.Twitch.Embed.VIDEO_READY, () => {
+              // You can now use 'player' to control playback
+            });
+
+            embedInitialized.current = true;
+          }
+        };
+
+        if (window.Twitch) {
+          initializeTwitchEmbed();
+        } else {
+          // Wait for the script to load
+          const checkTwitch = setInterval(() => {
+            if (window.Twitch) {
+              clearInterval(checkTwitch);
+              initializeTwitchEmbed();
+            }
+          }, 50);
+        }
       }
     }
   }, [platform, channelId, videoId, platformNum, bucketUrl]);
 
   return (
     <div>
+      <Script src="https://embed.twitch.tv/embed/v1.js" />
       <MenuBar />
 
       <div className="container mx-auto p-8">
@@ -66,6 +109,8 @@ export default function VideoPage() {
                   allowFullScreen
                 ></iframe>
               </div>
+            ) : platform === "twitch" ? (
+              <div ref={twitchEmbedRef} className="mb-6"></div>
             ) : (
               <div className="w-full h-64 bg-gray-200 rounded-md mb-6" />
             )}
