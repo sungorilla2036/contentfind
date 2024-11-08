@@ -22,10 +22,62 @@ export default function PlatformChannelForm({
   const [channelId, setChannelId] = useState(initialChannelId);
   const router = useRouter();
 
+  const parseChannelUrl = (input: string) => {
+    try {
+      const url = new URL(input);
+      const hostname = url.hostname.replace("www.", "");
+      let platform = "";
+      let channelId = "";
+
+      if (hostname.includes("youtube.com")) {
+        platform = "youtube";
+        const pathParts = url.pathname.split("/").filter((part) => part !== "");
+        channelId = pathParts[0]?.replace("@", "") || "";
+      } else if (hostname.includes("twitch.tv")) {
+        platform = "twitch";
+        const pathParts = url.pathname.split("/").filter((part) => part !== "");
+        channelId = pathParts[0] || "";
+      }
+      return { platform, channelId };
+    } catch {
+      return { platform: "", channelId: input };
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (channelId && platform) {
-      router.push(`/channels/${platform}/${channelId}`);
+    const res = parseChannelUrl(channelId);
+    let newPlatform = res.platform;
+    const newChannelId = res.channelId;
+    if (newPlatform) {
+      setPlatform(newPlatform);
+    } else {
+      newPlatform = platform;
+    }
+    if (channelId) {
+      setChannelId(newChannelId);
+    }
+    if (newChannelId && newPlatform) {
+      router.push(`/channels/${newPlatform}/${newChannelId}`);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault(); // Prevent default paste behavior
+    const pasteData = e.clipboardData.getData("text");
+
+    const res = parseChannelUrl(pasteData);
+    const newPlatform = res.platform;
+    const newChannelId = res.channelId;
+
+    if (newPlatform) {
+      setPlatform(newPlatform);
+    }
+    if (channelId) {
+      setChannelId(newChannelId);
+    }
+    if (newChannelId && newPlatform) {
+      router.push(`/channels/${newPlatform}/${newChannelId}`);
     }
   };
 
@@ -43,9 +95,10 @@ export default function PlatformChannelForm({
         </Select>
         <Input
           type="text"
-          placeholder="channel id/url"
+          placeholder="channel id or url"
           value={channelId}
           onChange={(e) => setChannelId(e.target.value)}
+          onPaste={handlePaste}
           className="flex-1"
         />
       </div>
