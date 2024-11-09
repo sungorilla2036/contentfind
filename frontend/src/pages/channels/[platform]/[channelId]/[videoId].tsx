@@ -7,6 +7,12 @@ import { useSession } from "@supabase/auth-helpers-react"; // Added import
 import Modal from "@/components/Modal"; // Added import
 import { Input } from "@/components/ui/input"; // Added import
 import { Button } from "@/components/ui/button"; // Ensure Button is imported
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 declare global {
   interface Window {
@@ -46,6 +52,7 @@ export default function VideoPage() {
   const [clips, setClips] = useState<
     { start_time: number; duration: number; title: string }[]
   >([]); // Added state for clips
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null); // Added state for copied index
 
   useEffect(() => {
     if (platform && channelId && videoId) {
@@ -188,6 +195,43 @@ export default function VideoPage() {
     }
   };
 
+  const formatTime = (seconds: number): string => {
+    const date = new Date(seconds * 1000);
+    const hh = date.getUTCHours();
+    const mm = date.getUTCMinutes();
+    const ss = date.getUTCSeconds();
+    return hh > 0
+      ? `${hh}:${mm.toString().padStart(2, "0")}:${ss
+          .toString()
+          .padStart(2, "0")}`
+      : `${mm}:${ss.toString().padStart(2, "0")}`;
+  };
+
+  const handleCopyCommand = (
+    clip: {
+      start_time: number;
+      duration: number;
+      title: string;
+    },
+    index: number
+  ) => {
+    // Modified to accept index
+    const videoUrl =
+      platform === "youtube"
+        ? `https://www.youtube.com/watch?v=${videoId}`
+        : `https://www.twitch.tv/videos/${videoId}`;
+    const start = formatTime(clip.start_time);
+    const end = formatTime(clip.start_time + clip.duration);
+    const output = `'${clip.title
+      .replace(/[^a-z0-9]/gi, "_")
+      .toLowerCase()}.mp4'`; // Example output filename
+    const command = `yt-dlp '${videoUrl}' --download-sections "*${start}-${end}" --force-keyframes-at-cuts -o ${output} -S "vcodec:h264,res,acodec:m4a" --recode mp4`;
+    navigator.clipboard.writeText(command);
+
+    setCopiedIndex(index); // Set copied index
+    setTimeout(() => setCopiedIndex(null), 1000); // Reset after 1 seconds
+  };
+
   return (
     <div>
       <Script src="https://embed.twitch.tv/embed/v1.js" />
@@ -307,8 +351,8 @@ export default function VideoPage() {
                         <h3 className="text-lg font-semibold text-gray-800 mb-2 line-clamp-1">
                           {clip.title}
                         </h3>
-                        <div className="flex items-center space-x-4 text-sm text-gray-600">
-                          <div className="flex items-center">
+                        <div className="flex justify-between items-center space-x-4 text-sm text-gray-600">
+                          <div className="flex  items-center">
                             <svg
                               className="w-4 h-4 mr-1"
                               fill="none"
@@ -334,6 +378,34 @@ export default function VideoPage() {
                                   .slice(11, 19)}
                             </span>
                           </div>
+                          <TooltipProvider>
+                            <Tooltip
+                              open={copiedIndex === index} // Check if index matches
+                            >
+                              <TooltipTrigger asChild>
+                                <Button
+                                  onClick={() => handleCopyCommand(clip, index)} // Pass index
+                                  className="ml-2 flex items-center gap-1"
+                                >
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+                                    />
+                                  </svg>
+                                  yt-dlp download command
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Copied!</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
                       </div>
                     ))
