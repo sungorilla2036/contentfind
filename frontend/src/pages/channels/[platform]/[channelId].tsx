@@ -367,7 +367,7 @@ export default function ChannelPage() {
     const loadMoreResults = async () => {
       if (fullSearchResults.length > 0) {
         const nextResults = fullSearchResults.slice(
-          visibleCount - 5,
+          Math.max((Math.ceil(visibleCount / 5) - 1) * 5, 0),
           visibleCount
         );
         const videosData = await Promise.all(
