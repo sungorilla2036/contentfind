@@ -100,6 +100,8 @@ export default function ChannelPage() {
   );
   const apiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "";
   const bucketUrl = process.env.NEXT_PUBLIC_BUCKET_URL || "";
+  const [jobStatus, setJobStatus] = useState<string | null>(null); // New state for job status
+  const [queuePosition, setQueuePosition] = useState<number | null>(null); // New state for queue position
 
   const platformIds: { [key: string]: number } = {
     youtube: 0,
@@ -233,6 +235,8 @@ export default function ChannelPage() {
       setSearchResults([]);
       setFullSearchResults([]);
       setVisibleCount(5);
+      setJobStatus(null); // Reset job status
+      setQueuePosition(null); // Reset queue position
       if (platform === "twitch") {
         setNeedsLoadTwitch(true);
       } else {
@@ -263,11 +267,54 @@ export default function ChannelPage() {
             setVideos(videosList);
           })
           .catch(() => {
-            setVideos([]);
+            if (session?.access_token) {
+              // Call GET /jobs API to retrieve job status
+              fetch(
+                `${apiUrl}/jobs?platform_id=${platformNum}&channel_id=${channelId
+                  .toString()
+                  .toLowerCase()}`,
+                {
+                  method: "GET",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                }
+              )
+                .then((response) => response.json())
+                .then((data) => {
+                  if (data.length > 0) {
+                    const jobStatusData = data[0];
+                    const jobStatusStrings = [
+                      "queued",
+                      "running",
+                      "queued",
+                      "completed",
+                      "failed",
+                    ];
+                    setJobStatus(jobStatusStrings[jobStatusData.state]);
+                    setQueuePosition(jobStatusData.pos || null);
+                  } else {
+                    setJobStatus(null);
+                    setQueuePosition(null);
+                  }
+                })
+                .catch((error) => {
+                  console.error("Error fetching job status:", error);
+                  // Optionally set a fallback message
+                  setJobStatus("Error fetching job status.");
+                });
+            }
           });
       }
     }
-  }, [channelId, platform, bucketUrl]);
+  }, [
+    channelId,
+    platform,
+    bucketUrl,
+    apiUrl,
+    platformNum,
+    session?.access_token,
+  ]);
 
   // Cache provider_token to localStorage
   useEffect(() => {
@@ -603,11 +650,22 @@ export default function ChannelPage() {
                     )
                   )
                 ) : (
-                  // Non-Twitch channel
                   !isIndexed && (
                     <>
                       <p className="mb-4">Channel not indexed</p>
-                      <Button onClick={handleReindex}>Index</Button>
+                      {jobStatus && jobStatus !== "failed" ? (
+                        <p className="mb-4">
+                          Job Status: {jobStatus}
+                          {queuePosition !== null && (
+                            <>
+                              <br />
+                              Queue Position: {queuePosition}
+                            </>
+                          )}
+                        </p>
+                      ) : (
+                        <Button onClick={handleReindex}>Index</Button>
+                      )}
                     </>
                   )
                 )}

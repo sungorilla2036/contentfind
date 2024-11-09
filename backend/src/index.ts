@@ -189,7 +189,7 @@ export default {
 				let conflictFields;
 				if (content_id) {
 					jobDb = transcriptionJobsDb;
-					conflictFields = '(platform_id, channel_id, content_id)';
+					conflictFields = '(platform_id, content_id)';
 				} else {
 					jobDb = indexJobsDb;
 					conflictFields = '(platform_id, channel_id)';
@@ -253,6 +253,75 @@ export default {
 					headers: {
 						'Access-Control-Allow-Origin': '*',
 					},
+				});
+			}
+		}
+
+		// Add GET /jobs route
+		if (request.method === 'GET' && new URL(request.url).pathname === '/jobs') {
+			try {
+				const url = new URL(request.url);
+				const platform_id = url.searchParams.get('platform_id');
+				const content_id = url.searchParams.get('content_id');
+				const channel_id = url.searchParams.get('channel_id');
+
+				if (!platform_id || !(content_id || channel_id)) {
+					return new Response('Unauthorized', {
+						status: 401,
+						headers: { 'Access-Control-Allow-Origin': '*' },
+					});
+				}
+
+				let jobDb;
+				let query;
+				let params: any[] = [platform_id];
+
+				if (content_id) {
+					jobDb = env.CF_TRANSCRIPTION_JOBS;
+					query = 'SELECT * FROM transcription_jobs WHERE platform_id = ? AND content_id = ?';
+					params.push(content_id);
+				} else {
+					jobDb = env.CF_INDEX_JOBS;
+					query = 'SELECT * FROM indexer_jobs WHERE platform_id = ? AND channel_id = ?';
+					params.push(channel_id);
+				}
+
+				const job = await jobDb
+					.prepare(query)
+					.bind(...params)
+					.first();
+
+				if (!job) {
+					return new Response('[]', {
+						status: 200,
+						headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+					});
+				}
+
+				const responseData: any = { state: job.job_state };
+
+				if (job.job_state === 0) {
+					// Assuming 0 represents 'queued'
+					const countResult = await jobDb
+						.prepare(
+							`SELECT COUNT(*) as count FROM ${
+								content_id ? 'transcription_jobs' : 'indexer_jobs'
+							} WHERE platform_id = ? AND job_state = 0 AND queued < ?`
+						)
+						.bind(platform_id, job.queued)
+						.first();
+					responseData.pos = (countResult?.count as number) + 1;
+				}
+
+				return new Response(JSON.stringify([responseData]), {
+					status: 200,
+					headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+				});
+			} catch (error) {
+				console.error(error);
+				return new Response('Error fetching job status', {
+					status: 400,
+					headers: { 'Access-Control-Allow-Origin': '*' },
 				});
 			}
 		}
