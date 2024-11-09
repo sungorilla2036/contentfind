@@ -90,7 +90,7 @@ export default function ChannelPage() {
     []
   ); // Added to store all search results
   const [searchResults, setSearchResults] = useState<Video[]>([]); // Visible search results
-  const [visibleCount, setVisibleCount] = useState(5); // Initialize visibility count
+  const [visibleCount, setVisibleCount] = useState(0); // Initialize visibility count
   const [pagefindInitialized, setPagefindInitialized] = useState(false);
   const [twitchPaginationCursor, setTwitchPaginationCursor] = useState<
     string | null
@@ -121,10 +121,10 @@ export default function ChannelPage() {
   };
 
   const [isLoading, setIsLoading] = useState(false);
-  const [needsLoadTwitch, setNeedsLoadTwitch] = useState(false);
+  const [loadMoreVideos, setLoadMoreVideos] = useState(false);
 
-  const fetchTwitchVideos = useCallback(
-    async (isFirstLoad: boolean = false, cursor?: string) => {
+  const loadMoreTwitchVideos = useCallback(
+    async (cursor?: string) => {
       if (isLoading) return;
 
       // Stop if we've reached the end
@@ -196,11 +196,10 @@ export default function ChannelPage() {
           }));
         }
 
-        if (isFirstLoad) {
-          setVideos([...videosList]);
-        } else {
-          setVideos((prevVideos) => [...prevVideos, ...videosList]);
-        }
+        setVisibleCount((prevCount) =>
+          Math.min(videos.length + videosList.length, prevCount + 5)
+        );
+        setVideos((prevVideos) => [...prevVideos, ...videosList]);
       } catch (error) {
         console.error("Error fetching Twitch videos:", error);
         setModalMessage("Error fetching Twitch videos.");
@@ -220,11 +219,58 @@ export default function ChannelPage() {
   );
 
   useEffect(() => {
-    if (needsLoadTwitch) {
-      fetchTwitchVideos(true);
-      setNeedsLoadTwitch(false);
+    if (loadMoreVideos) {
+      if (search) {
+        const loadMoreResults = async () => {
+          if (fullSearchResults.length > 0) {
+            const nextResults = fullSearchResults.slice(
+              searchResults.length,
+              Math.min(searchResults.length + 5, fullSearchResults.length)
+            );
+            const videosData = await Promise.all(
+              nextResults.map(async (r: SearchResult) => {
+                const data: SearchResultData = await r.data();
+                const videoId: string = data.url.split("/").pop() || "";
+                const matchedVideo: Video | undefined = videos.find(
+                  (video: Video) => video.id === videoId
+                );
+                return {
+                  id: videoId,
+                  title: matchedVideo ? matchedVideo.title : `Video ${videoId}`,
+                  date: matchedVideo ? matchedVideo.date : 0,
+                  transcriptAvailable: matchedVideo
+                    ? matchedVideo.transcriptAvailable
+                    : false,
+                  excerpt: data.excerpt,
+                } as Video;
+              })
+            );
+            setSearchResults((prevResults) => [...prevResults, ...videosData]);
+          }
+        };
+
+        loadMoreResults();
+      } else {
+        if (platform === "twitch") {
+          loadMoreTwitchVideos(twitchPaginationCursor || "");
+        } else {
+          setVisibleCount((prevCount) =>
+            Math.min(prevCount + 5, videos.length)
+          );
+        }
+      }
+      setLoadMoreVideos(false);
     }
-  }, [fetchTwitchVideos, needsLoadTwitch]);
+  }, [
+    loadMoreTwitchVideos,
+    fullSearchResults,
+    loadMoreVideos,
+    platform,
+    search,
+    searchResults.length,
+    twitchPaginationCursor,
+    videos,
+  ]);
 
   useEffect(() => {
     if (channelId) {
@@ -234,77 +280,81 @@ export default function ChannelPage() {
       setSearch("");
       setSearchResults([]);
       setFullSearchResults([]);
-      setVisibleCount(5);
+      setVisibleCount(0);
       setJobStatus(null); // Reset job status
       setQueuePosition(null); // Reset queue position
       if (platform === "twitch") {
-        setNeedsLoadTwitch(true);
+        setLoadMoreVideos(true);
       } else {
         const url = `${bucketUrl}/0/${channelId
           .toString()
           .toLowerCase()}/index.json`;
-        fetch(url)
-          .then((response) => response.json())
-          .then((data) => {
-            setIsIndexed(true);
-            const channelLastUpdated = data[0];
-            const videosData = data[1];
-            const date = new Date(channelLastUpdated * 24 * 60 * 60 * 1000);
-            setLastUpdatedDate(date);
-            const videosList = videosData.map(
-              (videoData: [string, string, number, string, number?]) => {
-                const [id, title, dateNumber, language, transcriptFlag] =
-                  videoData;
-                return {
-                  id,
-                  title,
-                  date: dateNumber,
-                  language: language,
-                  transcriptAvailable: transcriptFlag !== 0,
-                } as Video;
-              }
-            );
-            setVideos(videosList);
-          })
-          .catch(() => {
-            if (session?.access_token) {
-              // Call GET /jobs API to retrieve job status
-              fetch(
-                `${apiUrl}/jobs?platform_id=${platformNum}&channel_id=${channelId
-                  .toString()
-                  .toLowerCase()}`,
-                {
-                  method: "GET",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
+        const loadIndex = async () => {
+          await fetch(url)
+            .then((response) => response.json())
+            .then((data) => {
+              setIsIndexed(true);
+              const channelLastUpdated = data[0];
+              const videosData = data[1];
+              const date = new Date(channelLastUpdated * 24 * 60 * 60 * 1000);
+              setLastUpdatedDate(date);
+              const videosList = videosData.map(
+                (videoData: [string, string, number, string, number?]) => {
+                  const [id, title, dateNumber, language, transcriptFlag] =
+                    videoData;
+                  return {
+                    id,
+                    title,
+                    date: dateNumber,
+                    language: language,
+                    transcriptAvailable: transcriptFlag !== 0,
+                  } as Video;
                 }
-              )
-                .then((response) => response.json())
-                .then((data) => {
-                  if (data.length > 0) {
-                    const jobStatusData = data[0];
-                    const jobStatusStrings = [
-                      "queued",
-                      "running",
-                      "queued",
-                      "completed",
-                      "failed",
-                    ];
-                    setJobStatus(jobStatusStrings[jobStatusData.state]);
-                    setQueuePosition(jobStatusData.pos || null);
-                  } else {
-                    setJobStatus(null);
-                    setQueuePosition(null);
+              );
+              setVideos(videosList);
+              setVisibleCount(Math.min(videosList.length, 5));
+            })
+            .catch(() => {
+              if (session?.access_token) {
+                // Call GET /jobs API to retrieve job status
+                return fetch(
+                  `${apiUrl}/jobs?platform_id=${platformNum}&channel_id=${channelId
+                    .toString()
+                    .toLowerCase()}`,
+                  {
+                    method: "GET",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
                   }
-                })
-                .catch((error) => {
-                  console.error("Error fetching job status:", error);
-                  // Optionally set a fallback message
-                  setJobStatus("Error fetching job status.");
-                });
-            }
-          });
+                )
+                  .then((response) => response.json())
+                  .then((data) => {
+                    if (data.length > 0) {
+                      const jobStatusData = data[0];
+                      const jobStatusStrings = [
+                        "queued",
+                        "running",
+                        "queued",
+                        "completed",
+                        "failed",
+                      ];
+                      setJobStatus(jobStatusStrings[jobStatusData.state]);
+                      setQueuePosition(jobStatusData.pos || null);
+                    } else {
+                      setJobStatus(null);
+                      setQueuePosition(null);
+                    }
+                  })
+                  .catch((error) => {
+                    console.error("Error fetching job status:", error);
+                    // Optionally set a fallback message
+                    setJobStatus("Error fetching job status.");
+                  });
+              }
+            });
+        };
+        loadIndex();
       }
     }
   }, [
@@ -351,80 +401,26 @@ export default function ChannelPage() {
             const results = (searchResultsFull as SearchResultsFull).results;
             setFullSearchResults(results);
             setSearchResults([]); // Reset current visible results
-            setVisibleCount(5); // Reset count to 5 when searching
+            setLoadMoreVideos(true);
+          } else {
+            setFullSearchResults([]);
+            setSearchResults([]); // Reset current visible results
           }
         }
       } else {
         setSearchResults([]);
         setFullSearchResults([]);
-        setVisibleCount(5);
       }
     };
     performSearch();
   }, [search, platformNum, channelId, bucketUrl, pagefindInitialized]);
 
-  useEffect(() => {
-    const loadMoreResults = async () => {
-      if (fullSearchResults.length > 0) {
-        const nextResults = fullSearchResults.slice(
-          Math.max((Math.ceil(visibleCount / 5) - 1) * 5, 0),
-          visibleCount
-        );
-        const videosData = await Promise.all(
-          nextResults.map(async (r: SearchResult) => {
-            const data: SearchResultData = await r.data();
-            const videoId: string = data.url.split("/").pop() || "";
-            const matchedVideo: Video | undefined = videos.find(
-              (video: Video) => video.id === videoId
-            );
-            return {
-              id: videoId,
-              title: matchedVideo ? matchedVideo.title : `Video ${videoId}`,
-              date: matchedVideo ? matchedVideo.date : 0,
-              transcriptAvailable: matchedVideo
-                ? matchedVideo.transcriptAvailable
-                : false,
-              excerpt: data.excerpt,
-            } as Video;
-          })
-        );
-        setSearchResults((prevResults) => [...prevResults, ...videosData]);
-      }
-    };
-
-    loadMoreResults();
-  }, [fullSearchResults, visibleCount, videos]);
-
   const loader = useRef<HTMLDivElement | null>(null); // Added ref for loader
-  const handleIntersection = useCallback(() => {
-    if (search) {
-      setVisibleCount((prevCount) =>
-        Math.min(prevCount + 5, fullSearchResults.length)
-      );
-    } else {
-      if (
-        platform === "twitch" &&
-        visibleCount >= videos.length &&
-        twitchPaginationCursor
-      ) {
-        fetchTwitchVideos(false, twitchPaginationCursor);
-      }
-      setVisibleCount((prevCount) => Math.min(prevCount + 5, videos.length));
-    }
-  }, [
-    fetchTwitchVideos,
-    fullSearchResults.length,
-    platform,
-    search,
-    twitchPaginationCursor,
-    videos.length,
-    visibleCount,
-  ]);
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          handleIntersection();
+          setLoadMoreVideos(true);
         }
       },
       { threshold: 1 }
@@ -440,7 +436,7 @@ export default function ChannelPage() {
         observer.unobserve(elem);
       }
     };
-  }, [handleIntersection, loader]);
+  }, [loader]);
 
   const [modalMessage, setModalMessage] = useState(""); // Added state for modal message
   const [isModalVisible, setIsModalVisible] = useState(false); // Added state for modal visibility
