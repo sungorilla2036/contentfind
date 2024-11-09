@@ -122,7 +122,9 @@ export default function VideoPage() {
 
       const loadTranscript = async () => {
         fetch(
-          `${bucketUrl}/${platformNum}/${channelId}/transcripts/${videoId}.json`
+          `${bucketUrl}/${platformNum}/${channelId
+            .toString()
+            .toLocaleLowerCase()}/transcripts/${videoId}.json`
         )
           .then((response) => response.json())
           .then((data) => {
