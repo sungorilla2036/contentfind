@@ -139,7 +139,11 @@ export default function VideoPage() {
       // Fetch clips
       const loadClips = async () => {
         fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/videos/${videoId}/clips?platform=${platform}&channel_id=${channelId}`
+          `${
+            process.env.NEXT_PUBLIC_BACKEND_API_URL
+          }/videos/${videoId}/clips?platform=${platform}&channel_id=${channelId
+            .toString()
+            .toLowerCase()}`
         ) // Modified line
           .then((response) => response.json())
           .then((data) => {

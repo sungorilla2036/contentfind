@@ -165,11 +165,12 @@ export default {
 					});
 				}
 
-				const { platform_id, channel_id, content_id } = (await request.json()) as {
+				let { platform_id, channel_id, content_id } = (await request.json()) as {
 					platform_id: string;
 					channel_id: string;
 					content_id?: string;
 				};
+				channel_id = channel_id.toLowerCase();
 
 				// [transcription_jobs Only] Verify user has sufficient credits
 				if (content_id) {
@@ -263,7 +264,7 @@ export default {
 				const url = new URL(request.url);
 				const platform_id = url.searchParams.get('platform_id');
 				const content_id = url.searchParams.get('content_id');
-				const channel_id = url.searchParams.get('channel_id');
+				const channel_id = url.searchParams.get('channel_id')?.toLowerCase();
 
 				if (!platform_id || !(content_id || channel_id)) {
 					return new Response('Unauthorized', {
@@ -353,7 +354,7 @@ export default {
 
 				const userID = uuidToBigint(decoded.sub).toString();
 
-				const { platform, channel_id, content_id, start_time, duration, title } = (await request.json()) as {
+				let { platform, channel_id, content_id, start_time, duration, title } = (await request.json()) as {
 					platform: string;
 					channel_id: string;
 					content_id: string;
@@ -361,6 +362,7 @@ export default {
 					duration: number;
 					title?: string;
 				};
+				channel_id = channel_id.toLowerCase();
 
 				const clipsDb = getClipsDb(platform, env);
 
