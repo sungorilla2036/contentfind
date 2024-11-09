@@ -18,6 +18,10 @@ declare global {
   interface Window {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     Twitch: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onYouTubeIframeAPIReady: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    YT: any;
   }
 }
 
@@ -26,15 +30,18 @@ export default function VideoPage() {
   const { platform, channelId, videoId } = router.query;
 
   const [transcript, setTranscript] = useState<[number, number, string][]>([]);
-  const [embedUrl, setEmbedUrl] = useState<string>("");
   const bucketUrl = process.env.NEXT_PUBLIC_BUCKET_URL || "";
   const twitchEmbedRef = useRef<HTMLDivElement>(null);
   const embedInitialized = useRef(false);
   interface TwitchPlayer {
     seek: (time: number) => void;
+    getCurrentTime: () => number;
   }
 
   const playerInstanceRef = useRef<TwitchPlayer | null>(null); // Add this line
+  const youtubePlayerRef = useRef<HTMLDivElement>(null); // Add this line
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const youtubePlayerInstanceRef = useRef<any>(null); // Add this line
 
   const platformIds: { [key: string]: number } = {
     youtube: 0,
@@ -53,6 +60,7 @@ export default function VideoPage() {
     { start_time: number; duration: number; title: string }[]
   >([]); // Added state for clips
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null); // Added state for copied index
+  const [selectedInput, setSelectedInput] = useState<"start" | "end">("start"); // Added state
 
   useEffect(() => {
     if (platform && channelId && videoId) {
@@ -69,10 +77,24 @@ export default function VideoPage() {
 
       // Set embed URL based on platform
       if (platform === "youtube") {
-        setEmbedUrl(`https://www.youtube.com/embed/${videoId}?enablejsapi=1`); // Modified line
-      } else if (platform === "twitch") {
-        setEmbedUrl(""); // Clear embedUrl since we'll use the Twitch Embed API
+        const onYouTubeIframeAPIReady = () => {
+          if (youtubePlayerRef.current && !youtubePlayerInstanceRef.current) {
+            youtubePlayerInstanceRef.current = new window.YT.Player(
+              youtubePlayerRef.current,
+              {
+                height: "400",
+                width: "100%",
+                videoId: videoId as string,
+                playerVars: {
+                  playsinline: 1,
+                },
+              }
+            );
+          }
+        };
 
+        window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady; // Assign the function
+      } else if (platform === "twitch") {
         const initializeTwitchEmbed = () => {
           if (
             twitchEmbedRef.current &&
@@ -123,16 +145,41 @@ export default function VideoPage() {
     }
   }, [platform, channelId, videoId, platformNum, bucketUrl]);
 
-  const handleSeek = (time: number) => {
-    if (platform === "youtube") {
-      document
-        .querySelector("iframe")
-        ?.contentWindow?.postMessage(
-          '{"event":"command","func":"seekTo","args":[' + time + "]}",
-          "*"
-        );
+  useEffect(() => {
+    const updateTime = () => {
+      let currentTime = 0;
+      if (platform === "youtube" && youtubePlayerInstanceRef.current) {
+        console.log(youtubePlayerInstanceRef.current);
+        try {
+          currentTime = youtubePlayerInstanceRef.current.getCurrentTime();
+        } catch (error) {
+          console.warn("Error getting current time:", error);
+        }
+      } else if (platform === "twitch" && playerInstanceRef.current) {
+        currentTime = playerInstanceRef.current.getCurrentTime();
+      }
+      if (selectedInput === "start") {
+        setStartTime(Math.floor(currentTime).toString());
+      } else if (selectedInput === "end") {
+        setEndTime(Math.floor(currentTime).toString());
+      }
+    };
+
+    const interval = setInterval(updateTime, 1000); // Update every second
+    return () => clearInterval(interval);
+  }, [platform, selectedInput]);
+
+  const handleSeek = (startTime: number, duration: number) => {
+    // Modified parameters
+    if (platform === "youtube" && youtubePlayerInstanceRef.current) {
+      youtubePlayerInstanceRef.current.seekTo(startTime, true);
     } else if (platform === "twitch" && playerInstanceRef.current) {
-      playerInstanceRef.current.seek(time);
+      playerInstanceRef.current.seek(startTime);
+    }
+    if (selectedInput === "start") {
+      setStartTime(Math.floor(startTime).toString());
+    } else if (selectedInput === "end") {
+      setEndTime(Math.ceil(startTime + duration).toString()); // Set end time using start + duration
     }
   };
 
@@ -235,6 +282,7 @@ export default function VideoPage() {
   return (
     <div>
       <Script src="https://embed.twitch.tv/embed/v1.js" />
+      <Script src="https://www.youtube.com/iframe_api" />
       <MenuBar />
 
       <div className="container mx-auto p-8">
@@ -246,16 +294,10 @@ export default function VideoPage() {
             initialChannelId={typeof channelId === "string" ? channelId : ""}
           />
           <div className="p-6">
-            {embedUrl ? (
+            {platform === "youtube" ? (
               <div className="mb-6">
-                <iframe
-                  width="100%"
-                  height="400"
-                  src={embedUrl}
-                  title="Video player"
-                  frameBorder="0"
-                  allowFullScreen
-                ></iframe>
+                <div ref={youtubePlayerRef}></div>{" "}
+                {/* Replace iframe with div */}
               </div>
             ) : platform === "twitch" ? (
               <div ref={twitchEmbedRef} className="mb-6"></div>
@@ -278,6 +320,7 @@ export default function VideoPage() {
                     placeholder="Start (s)"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
+                    onFocus={() => setSelectedInput("start")} // Added onFocus
                     required
                     className="w-24"
                   />
@@ -286,6 +329,7 @@ export default function VideoPage() {
                     placeholder="End (s)"
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
+                    onFocus={() => setSelectedInput("end")} // Added onFocus
                     required
                     className="w-24"
                   />
@@ -319,7 +363,7 @@ export default function VideoPage() {
                     <div
                       key={index}
                       className="p-1 rounded hover:bg-gray-100 cursor-pointer transition-colors duration-200 group relative"
-                      onClick={() => handleSeek(line[0])}
+                      onClick={() => handleSeek(line[0], line[1])} // Pass start time and duration
                       title={
                         new Date(line[0] * 1000).toISOString().slice(11, 19) +
                         "-" +
@@ -346,7 +390,9 @@ export default function VideoPage() {
                         key={index}
                         className="p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md 
                                   cursor-pointer transition-all duration-200 bg-white"
-                        onClick={() => handleSeek(clip.start_time)}
+                        onClick={() =>
+                          handleSeek(clip.start_time, clip.duration)
+                        }
                       >
                         <h3 className="text-lg font-semibold text-gray-800 mb-2 line-clamp-1">
                           {clip.title}
