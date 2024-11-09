@@ -64,17 +64,6 @@ export default function VideoPage() {
 
   useEffect(() => {
     if (platform && channelId && videoId) {
-      fetch(
-        `${bucketUrl}/${platformNum}/${channelId}/transcripts/${videoId}.json`
-      )
-        .then((response) => response.json())
-        .then((data) => {
-          setTranscript(data);
-        })
-        .catch(() => {
-          setTranscript([[0, 0, "Transcript not available."]]);
-        });
-
       // Set embed URL based on platform
       if (platform === "youtube") {
         const onYouTubeIframeAPIReady = () => {
@@ -131,17 +120,34 @@ export default function VideoPage() {
         }
       }
 
+      const loadTranscript = async () => {
+        fetch(
+          `${bucketUrl}/${platformNum}/${channelId}/transcripts/${videoId}.json`
+        )
+          .then((response) => response.json())
+          .then((data) => {
+            setTranscript(data);
+          })
+          .catch(() => {
+            setTranscript([[0, 0, "Transcript not available."]]);
+          });
+      };
+      loadTranscript();
+
       // Fetch clips
-      fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/videos/${videoId}/clips?platform=${platform}&channel_id=${channelId}`
-      ) // Modified line
-        .then((response) => response.json())
-        .then((data) => {
-          setClips(data);
-        })
-        .catch(() => {
-          setClips([]);
-        });
+      const loadClips = async () => {
+        fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/videos/${videoId}/clips?platform=${platform}&channel_id=${channelId}`
+        ) // Modified line
+          .then((response) => response.json())
+          .then((data) => {
+            setClips(data);
+          })
+          .catch(() => {
+            setClips([]);
+          });
+      };
+      loadClips();
     }
   }, [platform, channelId, videoId, platformNum, bucketUrl]);
 
@@ -279,7 +285,20 @@ export default function VideoPage() {
   return (
     <div>
       <Script src="https://embed.twitch.tv/embed/v1.js" />
-      <Script src="https://www.youtube.com/iframe_api" />
+      <Script
+        src="https://www.youtube.com/iframe_api"
+        strategy="afterInteractive"
+        onReady={() => {
+          if (platform === "youtube") {
+            const currentInterval = setInterval(() => {
+              if (window.YT.Player) {
+                window.onYouTubeIframeAPIReady();
+              }
+              clearInterval(currentInterval);
+            }, 100);
+          }
+        }}
+      />
       <MenuBar />
 
       <div className="container mx-auto p-8">
