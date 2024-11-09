@@ -149,11 +149,8 @@ export default function VideoPage() {
     const updateTime = () => {
       let currentTime = 0;
       if (platform === "youtube" && youtubePlayerInstanceRef.current) {
-        console.log(youtubePlayerInstanceRef.current);
-        try {
+        if (youtubePlayerInstanceRef.current.getCurrentTime) {
           currentTime = youtubePlayerInstanceRef.current.getCurrentTime();
-        } catch (error) {
-          console.warn("Error getting current time:", error);
         }
       } else if (platform === "twitch" && playerInstanceRef.current) {
         currentTime = playerInstanceRef.current.getCurrentTime();
