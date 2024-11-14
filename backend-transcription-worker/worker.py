@@ -351,7 +351,7 @@ def process_job(job):
 
     # Update job status to completed
     print("Updating job status to completed")
-    update_job_status(platform_id, content_id, 2)
+    update_job_status(platform_id, content_id, 3)
 
 
 async def create_pagefind_index(transcripts_folder, output_path, video_info):
@@ -411,7 +411,7 @@ def index_arr_to_obj(index_arr):
             "title": video[1],
             "upload_date": datetime.fromtimestamp(video[2] * 24 * 60 * 60),
             "language": video[3] if len(video) > 3 else "en",
-            "missingTranscript": True if len(video) > 4 else False,
+            "missingTranscript": True if len(video) > 3 else False,
         }
         for video in index_arr[1]
     }
@@ -438,7 +438,7 @@ def main():
             print("Error processing job:", error)
             try:
                 update_job_status(
-                    job["platform_id"], job["content_id"], 3  # Update status to failed
+                    job["platform_id"], job["content_id"], 4  # Update status to failed
                 )
             except Exception as e:
                 print("Error updating job status:", e)
