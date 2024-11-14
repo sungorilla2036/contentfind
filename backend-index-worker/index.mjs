@@ -164,7 +164,7 @@ async function processJob(job, download_only) {
 
     // Unzip if present
     const directory = await unzipper.Open.file(zipPath);
-    await directory.extract({ path: channelFolder });
+    await directory.extract({ path: transcriptsFolder });
     console.log("transcripts.zip downloaded and extracted successfully");
     // Delete the zip file
     fs.unlinkSync(zipPath);
@@ -519,18 +519,18 @@ async function main() {
 main();
 
 //clear s3 bucket
-// async function clearBucket() {
-//   const bucketName = process.env.R2_BUCKET_NAME;
-//   const params = {
-//     Bucket: bucketName,
-//   };
-//   const data = await s3.listObjects(params).promise();
-//   if (data.Contents.length === 0) return;
-//   const deleteParams = {
-//     Bucket: bucketName,
-//     Delete: { Objects: data.Contents.map((item) => ({ Key: item.Key })) },
-//   };
-//   await s3.deleteObjects(deleteParams).promise();
-//   if (data.IsTruncated) await clearBucket();
-// }
-// clearBucket();
+async function clearBucket() {
+  const bucketName = process.env.R2_BUCKET_NAME;
+  const params = {
+    Bucket: bucketName,
+  };
+  const data = await s3.listObjects(params).promise();
+  if (data.Contents.length === 0) return;
+  const deleteParams = {
+    Bucket: bucketName,
+    Delete: { Objects: data.Contents.map((item) => ({ Key: item.Key })) },
+  };
+  await s3.deleteObjects(deleteParams).promise();
+  if (data.IsTruncated) await clearBucket();
+}
+//clearBucket();
