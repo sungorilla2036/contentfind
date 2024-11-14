@@ -443,7 +443,7 @@ export default function ChannelPage() {
 
   const handleReindex = async () => {
     if (!session) {
-      setModalMessage("Please log in to perform this action."); // Replaced alert with modal
+      setModalMessage("Please log in to perform this action.");
       setIsModalVisible(true);
       return;
     }
@@ -464,57 +464,61 @@ export default function ChannelPage() {
       if (res.ok) {
         setModalMessage(
           "Indexing job queued successfully. Check back in a few minutes! The indexing process can take 10 seconds per video depending on the size of the transcript."
-        ); // Replaced alert with modal
+        );
         setIsModalVisible(true);
         setIsIndexed(true);
       } else {
         const errorText = await res.text();
-        setModalMessage(`Error creating indexing job: ${errorText}`); // Replaced alert with modal
+        setModalMessage(`Error creating indexing job: ${errorText}`);
         setIsModalVisible(true);
       }
     } catch (error) {
       console.error("Error creating indexing job:", error);
-      setModalMessage("An error occurred while creating the job."); // Replaced alert with modal
+      setModalMessage("An error occurred while creating the job.");
       setIsModalVisible(true);
     }
   };
 
   const handleTranscribe = async (contentId: string) => {
-    console.log(contentId);
-    setModalMessage("Feature coming soon!"); // Replaced alert with modal
-    setIsModalVisible(true);
-    // if (!session) {
-    //   setModalMessage("Please log in to perform this action."); // Replaced alert with modal
-    //   setIsModalVisible(true);
-    //   return;
-    // }
-    // const accessToken = session.access_token;
-    // try {
-    //   const response = await fetch(`${apiUrl}/jobs`, {
-    //     method: "POST",
-    //     headers: {
-    //       "Content-Type": "application/json",
-    //       Authorization: `Bearer ${accessToken}`,
-    //     },
-    //     body: JSON.stringify({
-    //       platform_id: platformNum,
-    //       channel_id: channelIdStr,
-    //       content_id: contentId,
-    //     }),
-    //   });
-    //   if (response.ok) {
-    //     setModalMessage("Transcription job created successfully."); // Replaced alert with modal
-    //     setIsModalVisible(true);
-    //   } else {
-    //     const errorText = await response.text();
-    //     setModalMessage(`Error creating transcription job: ${errorText}`); // Replaced alert with modal
-    //     setIsModalVisible(true);
-    //   }
-    // } catch (error) {
-    //   console.error("Error creating transcription job:", error);
-    //   setModalMessage("An error occurred while creating the job."); // Replaced alert with modal
-    //   setIsModalVisible(true);
-    // }
+    if (!session) {
+      setModalMessage("Please log in to perform this action.");
+      setIsModalVisible(true);
+      return;
+    }
+    if (platformNum === 0) {
+      setModalMessage(
+        "Transcription is currently unavailable for YouTube videos."
+      );
+      setIsModalVisible(true);
+      return;
+    }
+    const accessToken = session.access_token;
+    try {
+      const response = await fetch(`${apiUrl}/jobs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          platform_id: platformNum,
+          channel_id: channelId?.toString().toLowerCase(),
+          content_id: contentId,
+        }),
+      });
+      if (response.ok) {
+        setModalMessage("Transcription job created successfully.");
+        setIsModalVisible(true);
+      } else {
+        const errorText = await response.text();
+        setModalMessage(`Error creating transcription job: ${errorText}`);
+        setIsModalVisible(true);
+      }
+    } catch (error) {
+      console.error("Error creating transcription job:", error);
+      setModalMessage("An error occurred while creating the job.");
+      setIsModalVisible(true);
+    }
   };
 
   const videosToDisplay = search

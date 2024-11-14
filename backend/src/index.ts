@@ -198,11 +198,11 @@ export default {
 
 				const existingJob = await jobDb
 					.prepare(
-						`SELECT * FROM ${content_id ? 'transcription_jobs' : 'indexer_jobs'} WHERE platform_id = ? AND channel_id = ?${
-							content_id ? ' AND content_id = ?' : ''
+						`SELECT * FROM ${content_id ? 'transcription_jobs' : 'indexer_jobs'} WHERE platform_id = ? ${
+							content_id ? 'AND content_id = ?' : 'AND channel_id = ?'
 						}`
 					)
-					.bind(platform_id, channel_id, ...(content_id ? [content_id] : []))
+					.bind(platform_id, ...(content_id ? [content_id] : [channel_id]))
 					.first();
 
 				if (existingJob && [0, 1, 2].includes(existingJob.job_state as number)) {
