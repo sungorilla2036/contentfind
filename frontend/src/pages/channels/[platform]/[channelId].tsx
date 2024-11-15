@@ -111,7 +111,8 @@ export default function ChannelPage() {
       twitch: 1, // Add Twitch platform ID
       // add other platforms here
     };
-    return platformIds[platform as string] || 0;
+    const num = platformIds[platform as string] || 0;
+    return num;
   }, [platform]);
 
   const handleVideoClick = (videoId: string): void => {
@@ -289,7 +290,7 @@ export default function ChannelPage() {
       if (platform === "twitch") {
         setLoadMoreVideos(true);
       }
-      const url = `${bucketUrl}/0/${channelId
+      const url = `${bucketUrl}/${platformNum}/${channelId
         .toString()
         .toLowerCase()}/index.json`;
       const loadIndex = async () => {
@@ -556,7 +557,7 @@ export default function ChannelPage() {
               initialChannelId={typeof channelId === "string" ? channelId : ""}
             />
             <div className="space-y-4 mt-2">
-              {isIndexed && platform !== "twitch" && (
+              {isIndexed && (
                 <Input
                   type="text"
                   placeholder="Search"
