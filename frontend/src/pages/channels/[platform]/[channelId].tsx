@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
-import { useState, useEffect, useRef, useCallback } from "react"; // Added useRef
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"; // Added useRef
 import Modal from "@/components/Modal"; // Import the Modal component
 
 declare global {
@@ -105,13 +105,14 @@ export default function ChannelPage() {
   const [jobStatus, setJobStatus] = useState<string | null>(null); // New state for job status
   const [queuePosition, setQueuePosition] = useState<number | null>(null); // New state for queue position
   const [indexedVideoIds, setIndexedVideoIds] = useState<string[]>([]);
-
-  const platformIds: { [key: string]: number } = {
-    youtube: 0,
-    twitch: 1, // Add Twitch platform ID
-    // add other platforms here
-  };
-  const platformNum = platformIds[platform as string] || 0;
+  const platformNum = useMemo(() => {
+    const platformIds: { [key: string]: number } = {
+      youtube: 0,
+      twitch: 1, // Add Twitch platform ID
+      // add other platforms here
+    };
+    return platformIds[platform as string] || 0;
+  }, [platform]);
 
   const handleVideoClick = (videoId: string): void => {
     router.push(`/channels/${platform}/${channelId}/${videoId}`);
