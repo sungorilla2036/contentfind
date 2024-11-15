@@ -24,7 +24,8 @@ export default function Home() {
         ContentFind
       </h1>
       <h2 className="text-xl font-medium text-center text-slate-500 max-w-2xl mx-auto">
-        Transcribe, search, and highlight content from your favorite creators
+        Transcribe, search, and highlight content from your favorite creators on
+        YouTube, Twitch, and more!
       </h2>
       <Card className="max-w-xl w-full mt-2">
         <CardContent className="p-6">
