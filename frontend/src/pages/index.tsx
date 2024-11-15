@@ -20,8 +20,13 @@ export default function Home() {
   // Default home view remains unchanged
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-8">
-      <h1 className="text-6xl font-bold text-center mb-8">ContentFind</h1>
-      <Card className="max-w-xl w-full">
+      <h1 className="text-6xl font-black text-center mb-6 text-slate-700 hover:text-slate-600 transition-colors">
+        ContentFind
+      </h1>
+      <h2 className="text-xl font-medium text-center text-slate-500 max-w-2xl mx-auto">
+        Transcribe, search, and highlight content from your favorite creators
+      </h2>
+      <Card className="max-w-xl w-full mt-2">
         <CardContent className="p-6">
           <PlatformChannelForm />
         </CardContent>
