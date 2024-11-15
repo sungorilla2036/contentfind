@@ -70,6 +70,8 @@ type SearchResult = {
 };
 
 type SearchResultData = {
+  raw_url: string;
+  meta: Record<string, string>;
   url: string;
   excerpt: string;
 };
@@ -102,6 +104,7 @@ export default function ChannelPage() {
   const bucketUrl = process.env.NEXT_PUBLIC_BUCKET_URL || "";
   const [jobStatus, setJobStatus] = useState<string | null>(null); // New state for job status
   const [queuePosition, setQueuePosition] = useState<number | null>(null); // New state for queue position
+  const [indexedVideoIds, setIndexedVideoIds] = useState<string[]>([]);
 
   const platformIds: { [key: string]: number } = {
     youtube: 0,
@@ -189,7 +192,7 @@ export default function ChannelPage() {
             id: video.id,
             title: video.title,
             date: new Date(video.created_at).getTime() / (24 * 60 * 60 * 1000),
-            transcriptAvailable: false,
+            transcriptAvailable: indexedVideoIds.includes(video.id),
             thumbnail_url: video.thumbnail_url
               .replace("%{width}", "320")
               .replace("%{height}", "180"),
@@ -215,6 +218,7 @@ export default function ChannelPage() {
       session?.user.app_metadata.provider,
       twitchBroadcasterId,
       channelId,
+      indexedVideoIds,
     ]
   );
 
@@ -230,17 +234,15 @@ export default function ChannelPage() {
             const videosData = await Promise.all(
               nextResults.map(async (r: SearchResult) => {
                 const data: SearchResultData = await r.data();
-                const videoId: string = data.url.split("/").pop() || "";
+                const videoId: string = data.raw_url;
                 const matchedVideo: Video | undefined = videos.find(
                   (video: Video) => video.id === videoId
                 );
                 return {
                   id: videoId,
-                  title: matchedVideo ? matchedVideo.title : `Video ${videoId}`,
+                  title: data.meta.title,
                   date: matchedVideo ? matchedVideo.date : 0,
-                  transcriptAvailable: matchedVideo
-                    ? matchedVideo.transcriptAvailable
-                    : false,
+                  transcriptAvailable: true,
                   excerpt: data.excerpt,
                 } as Video;
               })
@@ -285,19 +287,26 @@ export default function ChannelPage() {
       setQueuePosition(null); // Reset queue position
       if (platform === "twitch") {
         setLoadMoreVideos(true);
-      } else {
-        const url = `${bucketUrl}/0/${channelId
-          .toString()
-          .toLowerCase()}/index.json`;
-        const loadIndex = async () => {
-          await fetch(url)
-            .then((response) => response.json())
-            .then((data) => {
-              setIsIndexed(true);
-              const channelLastUpdated = data[0];
-              const videosData = data[1];
-              const date = new Date(channelLastUpdated * 24 * 60 * 60 * 1000);
-              setLastUpdatedDate(date);
+      }
+      const url = `${bucketUrl}/0/${channelId
+        .toString()
+        .toLowerCase()}/index.json`;
+      const loadIndex = async () => {
+        await fetch(url)
+          .then((response) => response.json())
+          .then((data) => {
+            setIsIndexed(true);
+            const channelLastUpdated = data[0];
+            const videosData = data[1];
+            const date = new Date(channelLastUpdated * 24 * 60 * 60 * 1000);
+            setLastUpdatedDate(date);
+            if (platform === "twitch") {
+              const indexedIds = videosData.map(
+                (videoData: [string, string, number, string, number?]) =>
+                  videoData[0]
+              );
+              setIndexedVideoIds(indexedIds);
+            } else {
               const videosList = videosData.map(
                 (videoData: [string, string, number, string, number?]) => {
                   const [id, title, dateNumber, language, transcriptFlag] =
@@ -313,49 +322,49 @@ export default function ChannelPage() {
               );
               setVideos(videosList);
               setVisibleCount(Math.min(videosList.length, 5));
-            })
-            .catch(() => {
-              if (session?.access_token) {
-                // Call GET /jobs API to retrieve job status
-                return fetch(
-                  `${apiUrl}/jobs?platform_id=${platformNum}&channel_id=${channelId
-                    .toString()
-                    .toLowerCase()}`,
-                  {
-                    method: "GET",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
+            }
+          })
+          .catch(() => {
+            if (session?.access_token) {
+              // Call GET /jobs API to retrieve job status
+              return fetch(
+                `${apiUrl}/jobs?platform_id=${platformNum}&channel_id=${channelId
+                  .toString()
+                  .toLowerCase()}`,
+                {
+                  method: "GET",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                }
+              )
+                .then((response) => response.json())
+                .then((data) => {
+                  if (data.length > 0) {
+                    const jobStatusData = data[0];
+                    const jobStatusStrings = [
+                      "queued",
+                      "running",
+                      "queued",
+                      "completed",
+                      "failed",
+                    ];
+                    setJobStatus(jobStatusStrings[jobStatusData.state]);
+                    setQueuePosition(jobStatusData.pos || null);
+                  } else {
+                    setJobStatus(null);
+                    setQueuePosition(null);
                   }
-                )
-                  .then((response) => response.json())
-                  .then((data) => {
-                    if (data.length > 0) {
-                      const jobStatusData = data[0];
-                      const jobStatusStrings = [
-                        "queued",
-                        "running",
-                        "queued",
-                        "completed",
-                        "failed",
-                      ];
-                      setJobStatus(jobStatusStrings[jobStatusData.state]);
-                      setQueuePosition(jobStatusData.pos || null);
-                    } else {
-                      setJobStatus(null);
-                      setQueuePosition(null);
-                    }
-                  })
-                  .catch((error) => {
-                    console.error("Error fetching job status:", error);
-                    // Optionally set a fallback message
-                    setJobStatus("Error fetching job status.");
-                  });
-              }
-            });
-        };
-        loadIndex();
-      }
+                })
+                .catch((error) => {
+                  console.error("Error fetching job status:", error);
+                  // Optionally set a fallback message
+                  setJobStatus("Error fetching job status.");
+                });
+            }
+          });
+      };
+      loadIndex();
     }
   }, [
     channelId,
@@ -601,9 +610,11 @@ export default function ChannelPage() {
                           dangerouslySetInnerHTML={{ __html: video.excerpt }}
                         />
                       )}
-                      <p className="text-gray-500 text-sm">
-                        {formatDate(video.date)}
-                      </p>
+                      {video.date && (
+                        <p className="text-gray-500 text-sm">
+                          {formatDate(video.date)}
+                        </p>
+                      )}
                       {!video.transcriptAvailable && (
                         <div className="mt-2 flex justify-between items-center">
                           <span className="text-sm text-gray-500">
