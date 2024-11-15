@@ -216,8 +216,7 @@ export default function ChannelPage() {
     [
       isLoading,
       videos.length,
-      session?.provider_token,
-      session?.user.app_metadata.provider,
+      session,
       twitchBroadcasterId,
       channelId,
       indexedVideoIds,
@@ -368,21 +367,14 @@ export default function ChannelPage() {
       };
       loadIndex();
     }
-  }, [
-    channelId,
-    platform,
-    bucketUrl,
-    apiUrl,
-    platformNum,
-    session?.access_token,
-  ]);
+  }, [channelId, platform, bucketUrl, apiUrl, platformNum, session]);
 
   // Cache provider_token to localStorage
   useEffect(() => {
     if (session?.provider_token) {
       localStorage.setItem("provider_token", session.provider_token);
     }
-  }, [session?.provider_token]);
+  }, [session]);
 
   // Modify performSearch to load initial batch
   useEffect(() => {
