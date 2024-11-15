@@ -549,14 +549,15 @@ export default function ChannelPage() {
               initialChannelId={typeof channelId === "string" ? channelId : ""}
             />
             <div className="space-y-4 mt-2">
-              {isIndexed && (
-                <Input
-                  type="text"
-                  placeholder="Search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              )}
+              {isIndexed &&
+                (platform !== "twitch" || indexedVideoIds.length > 0) && (
+                  <Input
+                    type="text"
+                    placeholder="Search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                )}
 
               {lastUpdatedDate && (
                 <div className="flex items-center mt-2">
@@ -657,7 +658,10 @@ export default function ChannelPage() {
                 ) : (
                   !isIndexed && (
                     <>
-                      <p className="mb-4">Channel not indexed</p>
+                      <p className="mb-4">
+                        Channel not indexed. Index the channel to make it
+                        searchable!
+                      </p>
                       {jobStatus && jobStatus !== "failed" ? (
                         <p className="mb-4">
                           Job Status: {jobStatus}
