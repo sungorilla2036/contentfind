@@ -114,7 +114,7 @@ export default function PlatformChannelForm({
         </Select>
         <Input
           type="text"
-          placeholder="channel id or url"
+          placeholder="channel id, channel url, or video url"
           value={channelId}
           onChange={(e) => setChannelId(e.target.value)}
           onPaste={handlePaste}
