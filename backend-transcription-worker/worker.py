@@ -285,7 +285,7 @@ def process_job(job):
     s3.upload_file(
         f"{transcripts_folder}/{content_id}.json",
         R2_BUCKET_NAME,
-        f"{platform_id}/{channel_id}/transcripts/{content_id}.json",
+        f"{platform_id}/transcripts/{content_id}.json",
     )
 
     # Zip transcripts folder

@@ -8,6 +8,7 @@ import * as pagefind from "pagefind";
 import { XMLParser } from "fast-xml-parser";
 import unzipper from "unzipper";
 import { decode } from "html-entities";
+import path from "path";
 
 // Add new environment variables for account ID and database ID
 const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID;
@@ -372,6 +373,8 @@ async function writeIndexJson(videos, outputPath) {
 function indexArrToObj(indexArr) {
   return indexArr[1].reduce((obj, video) => {
     obj[video[0]] = {
+      id: video[0],
+      title: video[1],
       date: new Date(video[2] * 24 * 60 * 60 * 1000),
       language: video.length > 3 ? video[3] : "en",
     };
@@ -458,7 +461,7 @@ async function uploadFiles(
     // Upload JSON file
     const transcriptJsonFile = `${transcriptsFolder}/${video.id}.json`;
     const jsonContent = fs.readFileSync(transcriptJsonFile);
-    const jsonKey = `${platform_id}/${channel_id}/transcripts/${video.id}.json`;
+    const jsonKey = `${platform_id}/transcripts/${video.id}.json`;
     await s3
       .putObject({
         Bucket: bucketName,
@@ -519,18 +522,24 @@ async function main() {
 main();
 
 //clear s3 bucket
-async function clearBucket() {
-  const bucketName = process.env.R2_BUCKET_NAME;
-  const params = {
-    Bucket: bucketName,
-  };
-  const data = await s3.listObjects(params).promise();
-  if (data.Contents.length === 0) return;
-  const deleteParams = {
-    Bucket: bucketName,
-    Delete: { Objects: data.Contents.map((item) => ({ Key: item.Key })) },
-  };
-  await s3.deleteObjects(deleteParams).promise();
-  if (data.IsTruncated) await clearBucket();
-}
-//clearBucket();
+// async function clearBucket() {
+//   const bucketName = process.env.R2_BUCKET_NAME;
+//   const params = {
+//     Bucket: bucketName,
+//     Prefix: "0/unofficialjonathanblow/transcripts", // Filter at source
+//   };
+
+//   const data = await s3.listObjects(params).promise();
+//   if (data.Contents.length === 0) return;
+
+//   const deleteParams = {
+//     Bucket: bucketName,
+//     Delete: {
+//       Objects: data.Contents.map((item) => ({ Key: item.Key })),
+//     },
+//   };
+
+//   await s3.deleteObjects(deleteParams).promise();
+//   if (data.IsTruncated) await clearBucket();
+// }
+// clearBucket();
