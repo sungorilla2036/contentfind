@@ -610,23 +610,24 @@ export default function ChannelPage() {
                           {formatDate(video.date)}
                         </p>
                       )}
-                      {!video.transcriptAvailable && (
-                        <div className="mt-2 flex justify-between items-center">
-                          <span className="text-sm text-gray-500">
-                            Transcript Unavailable
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTranscribe(video.id);
-                            }}
-                          >
-                            Transcribe
-                          </Button>
-                        </div>
-                      )}
+                      {!video.transcriptAvailable &&
+                        !indexedVideoIds.includes(video.id) && (
+                          <div className="mt-2 flex justify-between items-center">
+                            <span className="text-sm text-gray-500">
+                              Transcript Unavailable
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTranscribe(video.id);
+                              }}
+                            >
+                              Transcribe
+                            </Button>
+                          </div>
+                        )}
                     </div>
                   ))}
                 </div>

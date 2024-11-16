@@ -18,6 +18,7 @@ from silero_vad import load_silero_vad, read_audio, get_speech_timestamps
 load_dotenv()
 
 # Add new environment variables for account ID and database ID
+CF_ZONE_ID = os.getenv("CF_ZONE_ID")
 CF_ACCOUNT_ID = os.getenv("CF_ACCOUNT_ID")
 D1_DATABASE_ID = os.getenv("D1_DATABASE_ID")
 
@@ -36,6 +37,7 @@ s3 = boto3.client(
 # D1 REST API configuration
 D1_API_TOKEN = os.getenv("D1_API_TOKEN")
 R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME")
+R2_BUCKET_CUSTOM_DOMAIN = os.getenv("R2_BUCKET_CUSTOM_DOMAIN")
 
 # Load models
 vad_model = load_silero_vad()
@@ -349,6 +351,24 @@ def process_job(job):
     for key in keys_to_delete:
         s3.delete_object(Bucket=R2_BUCKET_NAME, Key=key)
 
+    # Purge Cloudflare cache
+    print("Purging Cloudflare cache")
+    response = requests.post(
+        f"https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/purge_cache",
+        headers={
+            "Authorization": f"Bearer {D1_API_TOKEN}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "files": [
+                f"https://{R2_BUCKET_CUSTOM_DOMAIN}/{platform_id}/{channel_id}/index.json",
+                f"https://{R2_BUCKET_CUSTOM_DOMAIN}/{platform_id}/{channel_id}/transcripts.zip",
+                f"https://{R2_BUCKET_CUSTOM_DOMAIN}/{platform_id}/{channel_id}/pagefind/pagefind-entry.json",
+            ]
+        },
+    )
+    print(response.json())
+
     # Update job status to completed
     print("Updating job status to completed")
     update_job_status(platform_id, content_id, 3)
@@ -409,7 +429,9 @@ def index_arr_to_obj(index_arr):
         video[0]: {
             "id": video[0],
             "title": video[1],
-            "upload_date": datetime.fromtimestamp(video[2] * 24 * 60 * 60),
+            "upload_date": datetime.fromtimestamp(video[2] * 24 * 60 * 60).strftime(
+                "%Y%m%d"
+            ),
             "language": video[3] if len(video) > 3 else "en",
             "missingTranscript": True if len(video) > 3 else False,
         }
