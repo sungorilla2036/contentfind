@@ -60,8 +60,8 @@ export default function PlatformChannelForm({
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const res = parseChannelUrl(channelId, platform);
-    const newPlatform = res.platform || platform;
-    const newChannelId = res.channelId || channelId;
+    const newPlatform = res.platform;
+    const newChannelId = res.channelId;
     const newVideoId = res.videoId;
 
     if (newVideoId && newPlatform) {
