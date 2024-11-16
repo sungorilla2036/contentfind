@@ -300,17 +300,15 @@ async function processJob(job, download_only) {
     fs.mkdirSync(searchBundlePath, { recursive: true });
     fs.mkdirSync(`${searchBundlePath}/index`, { recursive: true });
     fs.mkdirSync(`${searchBundlePath}/fragment`, { recursive: true });
-    const { errors, files } = await index.getFiles();
+    await index.writeFiles({
+      outputPath: searchBundlePath,
+    });
 
     if (errors.length > 0) {
       console.error(errors);
       throw new Error("Error creating search bundle");
     }
 
-    for (const file of files) {
-      if (file.path.endsWith(".js") || file.path.endsWith(".css")) continue;
-      fs.writeFileSync(`${searchBundlePath}/${file.path}`, file.content);
-    }
     console.log("Zipping transcripts folder");
     await zipFolder(transcriptsFolder, `${channelFolder}/transcripts.zip`);
   }
@@ -431,6 +429,7 @@ async function uploadFiles(
       posix: true,
     });
     for (const filePath of files) {
+      if (filePath.endsWith(".js") || filePath.endsWith(".css")) continue;
       const fileContent = fs.readFileSync(filePath);
       const key = filePath.substring(4); // assume tmp/ is the prefix
       await s3
