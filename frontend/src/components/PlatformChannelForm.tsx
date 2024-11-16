@@ -23,36 +23,43 @@ export default function PlatformChannelForm({
   const router = useRouter();
 
   const parseChannelUrl = (input: string, defaultPlatform: string) => {
-    const url = new URL(input);
-    const hostname = url.hostname.replace("www.", "");
-    let videoId = "";
-    let channel = "";
-    if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
-      if (url.pathname === "/watch") {
-        videoId = url.searchParams.get("v") || "";
-      } else if (hostname === "youtu.be") {
-        videoId = url.pathname.slice(1);
-      } else {
-        const pathParts = url.pathname.split("/").filter((part) => part !== "");
-        if (
-          pathParts[0] === "channel" ||
-          pathParts[0] === "c" ||
-          pathParts[0] === "user"
-        ) {
-          channel = pathParts[1] || "";
+    try {
+      const url = new URL(input);
+      const hostname = url.hostname.replace("www.", "");
+      let videoId = "";
+      let channel = "";
+      if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
+        if (url.pathname === "/watch") {
+          videoId = url.searchParams.get("v") || "";
+        } else if (hostname === "youtu.be") {
+          videoId = url.pathname.slice(1);
         } else {
-          channel = pathParts[0]?.replace("@", "") || "";
+          const pathParts = url.pathname
+            .split("/")
+            .filter((part) => part !== "");
+          if (
+            pathParts[0] === "channel" ||
+            pathParts[0] === "c" ||
+            pathParts[0] === "user"
+          ) {
+            channel = pathParts[1] || "";
+          } else {
+            channel = pathParts[0]?.replace("@", "") || "";
+          }
         }
+        return { platform: "youtube", channelId: channel, videoId };
+      } else if (hostname.includes("twitch.tv")) {
+        const pathParts = url.pathname.split("/").filter((part) => part !== "");
+        if (pathParts[0] === "videos") {
+          videoId = pathParts[1] || "";
+        } else {
+          channel = pathParts[0] || "";
+        }
+        return { platform: "twitch", channelId: channel, videoId };
       }
-      return { platform: "youtube", channelId: channel, videoId };
-    } else if (hostname.includes("twitch.tv")) {
-      const pathParts = url.pathname.split("/").filter((part) => part !== "");
-      if (pathParts[0] === "videos") {
-        videoId = pathParts[1] || "";
-      } else {
-        channel = pathParts[0] || "";
-      }
-      return { platform: "twitch", channelId: channel, videoId };
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      // Ignore error
     }
     return { platform: defaultPlatform, channelId: input, videoId: "" };
   };
