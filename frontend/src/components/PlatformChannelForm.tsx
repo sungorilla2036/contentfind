@@ -28,19 +28,40 @@ export default function PlatformChannelForm({
       const hostname = url.hostname.replace("www.", "");
       let platform = "";
       let channelId = "";
+      let videoId = "";
 
-      if (hostname.includes("youtube.com")) {
+      if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
         platform = "youtube";
-        const pathParts = url.pathname.split("/").filter((part) => part !== "");
-        channelId = pathParts[0]?.replace("@", "") || "";
+        if (url.pathname === "/watch") {
+          videoId = url.searchParams.get("v") || "";
+        } else if (hostname === "youtu.be") {
+          videoId = url.pathname.slice(1);
+        } else {
+          const pathParts = url.pathname
+            .split("/")
+            .filter((part) => part !== "");
+          if (
+            pathParts[0] === "channel" ||
+            pathParts[0] === "c" ||
+            pathParts[0] === "user"
+          ) {
+            channelId = pathParts[1] || "";
+          } else {
+            channelId = pathParts[0]?.replace("@", "") || "";
+          }
+        }
       } else if (hostname.includes("twitch.tv")) {
         platform = "twitch";
         const pathParts = url.pathname.split("/").filter((part) => part !== "");
-        channelId = pathParts[0] || "";
+        if (pathParts[0] === "videos") {
+          videoId = pathParts[1] || "";
+        } else {
+          channelId = pathParts[0] || "";
+        }
       }
-      return { platform, channelId };
+      return { platform, channelId, videoId };
     } catch {
-      return { platform: "", channelId: input };
+      return { platform: "", channelId: "", videoId: "" };
     }
   };
 
@@ -49,6 +70,7 @@ export default function PlatformChannelForm({
     const res = parseChannelUrl(channelId);
     let newPlatform = res.platform;
     const newChannelId = res.channelId;
+    const newVideoId = res.videoId;
     if (newPlatform) {
       setPlatform(newPlatform);
     } else {
@@ -57,7 +79,9 @@ export default function PlatformChannelForm({
     if (channelId) {
       setChannelId(newChannelId);
     }
-    if (newChannelId && newPlatform) {
+    if (newVideoId && newPlatform) {
+      router.push(`/videos/${newPlatform}/${newVideoId}`);
+    } else if (newChannelId && newPlatform) {
       router.push(`/channels/${newPlatform}/${newChannelId}`);
     }
   };
@@ -69,6 +93,7 @@ export default function PlatformChannelForm({
     const res = parseChannelUrl(pasteData);
     const newPlatform = res.platform;
     const newChannelId = res.channelId;
+    const newVideoId = res.videoId;
 
     if (newPlatform) {
       setPlatform(newPlatform);
@@ -76,7 +101,9 @@ export default function PlatformChannelForm({
     if (channelId) {
       setChannelId(newChannelId);
     }
-    if (newChannelId && newPlatform) {
+    if (newVideoId && newPlatform) {
+      router.push(`/videos/${newPlatform}/${newVideoId}`);
+    } else if (newChannelId && newPlatform) {
       router.push(`/channels/${newPlatform}/${newChannelId}`);
     }
   };
