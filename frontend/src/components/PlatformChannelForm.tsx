@@ -22,63 +22,48 @@ export default function PlatformChannelForm({
   const [channelId, setChannelId] = useState(initialChannelId);
   const router = useRouter();
 
-  const parseChannelUrl = (input: string) => {
-    try {
-      const url = new URL(input);
-      const hostname = url.hostname.replace("www.", "");
-      let platform = "";
-      let channelId = "";
-      let videoId = "";
-
-      if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
-        platform = "youtube";
-        if (url.pathname === "/watch") {
-          videoId = url.searchParams.get("v") || "";
-        } else if (hostname === "youtu.be") {
-          videoId = url.pathname.slice(1);
-        } else {
-          const pathParts = url.pathname
-            .split("/")
-            .filter((part) => part !== "");
-          if (
-            pathParts[0] === "channel" ||
-            pathParts[0] === "c" ||
-            pathParts[0] === "user"
-          ) {
-            channelId = pathParts[1] || "";
-          } else {
-            channelId = pathParts[0]?.replace("@", "") || "";
-          }
-        }
-      } else if (hostname.includes("twitch.tv")) {
-        platform = "twitch";
+  const parseChannelUrl = (input: string, defaultPlatform: string) => {
+    const url = new URL(input);
+    const hostname = url.hostname.replace("www.", "");
+    let videoId = "";
+    let channel = "";
+    if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
+      if (url.pathname === "/watch") {
+        videoId = url.searchParams.get("v") || "";
+      } else if (hostname === "youtu.be") {
+        videoId = url.pathname.slice(1);
+      } else {
         const pathParts = url.pathname.split("/").filter((part) => part !== "");
-        if (pathParts[0] === "videos") {
-          videoId = pathParts[1] || "";
+        if (
+          pathParts[0] === "channel" ||
+          pathParts[0] === "c" ||
+          pathParts[0] === "user"
+        ) {
+          channel = pathParts[1] || "";
         } else {
-          channelId = pathParts[0] || "";
+          channel = pathParts[0]?.replace("@", "") || "";
         }
       }
-      return { platform, channelId, videoId };
-    } catch {
-      return { platform: "", channelId: "", videoId: "" };
+      return { platform: "youtube", channelId: channel, videoId };
+    } else if (hostname.includes("twitch.tv")) {
+      const pathParts = url.pathname.split("/").filter((part) => part !== "");
+      if (pathParts[0] === "videos") {
+        videoId = pathParts[1] || "";
+      } else {
+        channel = pathParts[0] || "";
+      }
+      return { platform: "twitch", channelId: channel, videoId };
     }
+    return { platform: defaultPlatform, channelId: input, videoId: "" };
   };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const res = parseChannelUrl(channelId);
-    let newPlatform = res.platform;
-    const newChannelId = res.channelId;
+    const res = parseChannelUrl(channelId, platform);
+    const newPlatform = res.platform || platform;
+    const newChannelId = res.channelId || channelId;
     const newVideoId = res.videoId;
-    if (newPlatform) {
-      setPlatform(newPlatform);
-    } else {
-      newPlatform = platform;
-    }
-    if (channelId) {
-      setChannelId(newChannelId);
-    }
+
     if (newVideoId && newPlatform) {
       router.push(`/videos/${newPlatform}/${newVideoId}`);
     } else if (newChannelId && newPlatform) {
@@ -90,7 +75,7 @@ export default function PlatformChannelForm({
     e.preventDefault(); // Prevent default paste behavior
     const pasteData = e.clipboardData.getData("text");
 
-    const res = parseChannelUrl(pasteData);
+    const res = parseChannelUrl(pasteData, platform);
     const newPlatform = res.platform;
     const newChannelId = res.channelId;
     const newVideoId = res.videoId;
