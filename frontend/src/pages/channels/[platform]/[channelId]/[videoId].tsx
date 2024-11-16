@@ -62,6 +62,10 @@ export default function VideoPage() {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null); // Added state for copied index
   const [selectedInput, setSelectedInput] = useState<"start" | "end">("start"); // Added state
 
+  const [copiedTranscript, setCopiedTranscript] = useState(false);
+  const [copiedTranscriptWithTimestamps, setCopiedTranscriptWithTimestamps] =
+    useState(false);
+
   useEffect(() => {
     if (platform && channelId && videoId) {
       // Set embed URL based on platform
@@ -288,6 +292,25 @@ export default function VideoPage() {
     setTimeout(() => setCopiedIndex(null), 1000); // Reset after 1 seconds
   };
 
+  const handleCopyTranscript = () => {
+    const transcriptText = transcript.map((line) => line[2]).join("\n");
+    navigator.clipboard.writeText(transcriptText);
+    setCopiedTranscript(true);
+    setTimeout(() => setCopiedTranscript(false), 1000);
+  };
+
+  const handleCopyTranscriptWithTimestamps = () => {
+    const transcriptText = transcript
+      .map((line) => {
+        const time = new Date(line[0] * 1000).toISOString().substring(11, 19);
+        return `[${time}] ${line[2]}`;
+      })
+      .join("\n");
+    navigator.clipboard.writeText(transcriptText);
+    setCopiedTranscriptWithTimestamps(true);
+    setTimeout(() => setCopiedTranscriptWithTimestamps(false), 1000);
+  };
+
   return (
     <div>
       <Script src="https://embed.twitch.tv/embed/v1.js" />
@@ -380,6 +403,31 @@ export default function VideoPage() {
             <div className="space-y-6 mt-6">
               <div>
                 <h2 className="text-xl font-semibold mb-3">Transcript</h2>
+
+                <div className="flex space-x-2 mb-3">
+                  <TooltipProvider>
+                    <Tooltip open={copiedTranscript}>
+                      <TooltipTrigger asChild>
+                        <Button onClick={handleCopyTranscript}>
+                          Copy Transcript
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Copied!</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip open={copiedTranscriptWithTimestamps}>
+                      <TooltipTrigger asChild>
+                        <Button onClick={handleCopyTranscriptWithTimestamps}>
+                          Copy Transcript with Timestamps
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Copied!</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+
                 <div className="h-[600px] overflow-y-auto pr-4">
                   {transcript.map((line, index) => (
                     <div
