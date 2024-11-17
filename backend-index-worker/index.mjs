@@ -11,8 +11,16 @@ import { decode } from "html-entities";
 import path from "path";
 
 // Add new environment variables for account ID and database ID
-const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID;
-const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
+const {
+  CF_ZONE_ID,
+  CF_ACCOUNT_ID,
+  D1_DATABASE_ID,
+  D1_API_TOKEN,
+  R2_BUCKET_NAME,
+  R2_ACCESS_KEY_ID,
+  R2_SECRET_ACCESS_KEY,
+  R2_BUCKET_CUSTOM_DOMAIN,
+} = process.env;
 
 // Construct the D1 API endpoint URL
 const D1_API_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/raw`;
@@ -20,13 +28,10 @@ const D1_API_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_I
 // Configure Cloudflare R2 using the account ID
 const s3 = new AWS.S3({
   endpoint: `https://${CF_ACCOUNT_ID}.r2.cloudflarestorage.com`, // Constructed using account ID
-  accessKeyId: process.env.R2_ACCESS_KEY_ID,
-  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  accessKeyId: R2_ACCESS_KEY_ID,
+  secretAccessKey: R2_SECRET_ACCESS_KEY,
   signatureVersion: "v4",
 });
-
-// D1 REST API configuration
-const D1_API_TOKEN = process.env.D1_API_TOKEN;
 
 async function fetchAndUpdateOldestJobWithStatus(status, newStatus) {
   const transaction = `
@@ -139,7 +144,7 @@ async function processJob(job, download_only) {
   console.log("Attempting to download index.json from Cloudflare R2");
   try {
     const params = {
-      Bucket: process.env.R2_BUCKET_NAME,
+      Bucket: R2_BUCKET_NAME,
       Key: `${platform_id}/${channel_id}/index.json`,
     };
     const data = await s3.getObject(params).promise();
@@ -156,7 +161,7 @@ async function processJob(job, download_only) {
   console.log("Attempting to download transcripts.zip from Cloudflare R2");
   try {
     const params = {
-      Bucket: process.env.R2_BUCKET_NAME,
+      Bucket: R2_BUCKET_NAME,
       Key: transcriptsZipKey,
     };
     const data = await s3.getObject(params).promise();
@@ -321,6 +326,28 @@ async function processJob(job, download_only) {
   console.log("Uploading files to Cloudflare R2");
   await uploadFiles(videos, platform_id, channel_id);
 
+  // purge cache
+  console.log("Purging Cloudflare cache");
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${D1_API_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        files: [
+          `https://${R2_BUCKET_CUSTOM_DOMAIN}/${platform_id}/${channel_id}/index.json`,
+          `https://${R2_BUCKET_CUSTOM_DOMAIN}/${platform_id}/${channel_id}/transcripts.zip`,
+          `https://${R2_BUCKET_CUSTOM_DOMAIN}/${platform_id}/${channel_id}/pagefind/pagefind-entry.json`,
+        ],
+      }),
+    }
+  );
+
+  console.log(await response.json());
+
   // Update status to complete
   console.log("Updating job status to complete");
   await updateJobStatus(platform_id, channel_id, 3);
@@ -402,7 +429,7 @@ async function uploadFiles(
   const transcriptsZipPath = `${folderPath}/transcripts.zip`;
   const transcriptsFolder = `${folderPath}/transcripts`;
 
-  const bucketName = process.env.R2_BUCKET_NAME;
+  const bucketName = R2_BUCKET_NAME;
 
   // Upload index.json
   if (fs.existsSync(indexJsonPath)) {
