@@ -1,5 +1,24 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
 
+## Prerequisites
+
+### Install Node.js
+
+Install NPM however you prefer. I followed the guide at [https://nodejs.org/en/download/package-manager/](https://nodejs.org/en/download/package-manager/). 
+
+Run `npm install` to install the necessary dependencies.
+
+### Set up Supabase
+
+Create a supabase account at [https://supabase.com/](https://supabase.com/). Create a new project and navigate to the project settings. Copy the project URL and API key and save them for the next step.
+
+For supabase, you will need to create a `.env.local` file in this directory (`frontend`) with the following contents:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://<your_supabase_url>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your_supabase_anon_key>
+```
+
 ## Getting Started
 
 First, run the development server:
